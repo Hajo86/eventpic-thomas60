@@ -85,25 +85,49 @@
   function db() {
     if (dbp) return dbp;
     dbp = new Promise(function (res, rej) {
-      var r = indexedDB.open(DB_NAME, DB_VER);
+      var r;
+      try { r = indexedDB.open(DB_NAME, DB_VER); }
+      catch (e) { dbp = null; return rej(e); }
       r.onupgradeneeded = function () {
         var d = r.result;
         if (!d.objectStoreNames.contains('queue')) d.createObjectStore('queue', { keyPath: 'id' });
         if (!d.objectStoreNames.contains('local')) d.createObjectStore('local', { keyPath: 'id' });
       };
-      r.onsuccess = function () { res(r.result); };
-      r.onerror = function () { rej(r.error); };
+      r.onsuccess = function () {
+        var d = r.result;
+        // iOS friert die Seite ein, während die Kamera offen ist, und schließt
+        // dabei die Verbindung. Dann muss der Zwischenspeicher der Verbindung weg,
+        // sonst scheitert jede spätere Transaktion mit "connection is closing".
+        d.onclose = function () { if (dbp) dbp = null; };
+        d.onversionchange = function () { try { d.close(); } catch (e) {} dbp = null; };
+        res(d);
+      };
+      r.onerror = function () { dbp = null; rej(r.error); };
+      r.onblocked = function () { dbp = null; rej(new Error('IndexedDB blockiert')); };
     });
     return dbp;
   }
-  function tx(store, mode, fn) {
+  function isStaleDb(e) {
+    var m = (e && e.message) || '';
+    return /closing|InvalidStateError|database connection|not allowed in this context/i.test(m) ||
+           (e && e.name === 'InvalidStateError');
+  }
+  function tx(store, mode, fn, retried) {
     return db().then(function (d) {
       return new Promise(function (res, rej) {
-        var t = d.transaction(store, mode), s = t.objectStore(store), out;
-        out = fn(s);
+        var t, s, out;
+        try { t = d.transaction(store, mode); s = t.objectStore(store); }
+        catch (e) { dbp = null; return rej(e); }
+        try { out = fn(s); }
+        catch (e) { return rej(e); }
         t.oncomplete = function () { res(out && out.result !== undefined ? out.result : out); };
         t.onerror = function () { rej(t.error); };
+        t.onabort = function () { dbp = null; rej(t.error || new Error('Transaktion abgebrochen')); };
       });
+    }).catch(function (e) {
+      // Einmal neu verbinden und wiederholen — deckt den iOS-Fall ab.
+      if (!retried && isStaleDb(e)) { dbp = null; return tx(store, mode, fn, true); }
+      throw e;
     });
   }
   var idb = {
@@ -298,25 +322,47 @@
   }
 
   /* ======================= 9. Upload + Warteschlange ===================== */
+  // Die Warteschlange liegt in IndexedDB, damit Fotos einen Verbindungsabbruch
+  // oder das Schließen der Seite überleben. Ist IndexedDB nicht benutzbar
+  // (privater Modus, voller Speicher, eingebetteter Browser), darf das Foto
+  // NICHT verloren gehen: dann wird es nur im Arbeitsspeicher gehalten und
+  // sofort hochgeladen.
+  var memQueue = [];
+  var idbOk = true;
+
+  function storageNote() {
+    return idbOk ? '' :
+      ' Hinweis: Dieser Browser erlaubt keinen Zwischenspeicher (privater Modus?). ' +
+      'Das Foto wird sofort gesendet — lass die Seite bis dahin offen.';
+  }
+
   function enqueue(item) {
     state.queue.push(item.id);
-    return idb.put('queue', item).then(function () { return flush(); });
+    return idb.put('queue', item).catch(function () {
+      idbOk = false;
+      memQueue.push(item);
+    }).then(function () { return flush(); });
   }
 
   var flushing = false;
   function flush() {
     if (flushing) return Promise.resolve();
     flushing = true;
-    return idb.all('queue').then(function (items) {
-      state.queue = items.map(function (i) { return i.id; });
+    return (idbOk ? idb.all('queue') : Promise.resolve([]))
+      .catch(function () { idbOk = false; return []; })
+      .then(function (stored) {
+      var items = stored.concat(memQueue);
       if (!items.length) return;
       if (!online()) {
         // Demo-Modus: Warteschlange in die lokale Galerie überführen
         return items.reduce(function (p, it) {
           return p.then(function () {
-            return idb.put('local', it).then(function () { return idb.del('queue', it.id); });
+            return idb.put('local', it)
+              .then(function () { return idb.del('queue', it.id); })
+              .catch(function () { idbOk = false; });
           });
         }, Promise.resolve()).then(function () {
+          memQueue = [];
           state.queue = [];
           return loadDemoPhotos();
         });
@@ -332,17 +378,22 @@
               path: path, owner_token: it.owner_token, width: it.width, height: it.height,
             });
           }).then(function () {
-            return idb.del('queue', it.id);
+            memQueue = memQueue.filter(function (m) { return m.id !== it.id; });
+            return idb.del('queue', it.id).catch(function () {});
           }).catch(function (e) {
             it.error = e.message; it.tries = (it.tries || 0) + 1;
-            return idb.put('queue', it);
+            return idb.put('queue', it).catch(function () {
+              idbOk = false;
+              if (memQueue.indexOf(it) < 0) memQueue.push(it);
+            });
           });
         });
       }, Promise.resolve());
     }).then(function () {
-      return idb.all('queue');
+      return idbOk ? idb.all('queue').catch(function () { return []; }) : [];
     }).then(function (rest) {
-      state.queue = rest.map(function (i) { return i.id; });
+      state.queue = rest.map(function (i) { return i.id; })
+        .concat(memQueue.map(function (i) { return i.id; }));
       flushing = false;
       return refresh(true);
     }).catch(function (e) {
@@ -546,12 +597,13 @@
           owner_token: ownerToken, created_at: new Date().toISOString(), tries: 0,
         };
         clearPending();
-        markMine(id);
         enqueue(item).then(function () {
-          toast(online() ? 'Danke! Dein Foto ist in der Galerie. 🎉' : 'Foto gespeichert (Demo-Modus).');
+          markMine(id);
+          toast((online() ? 'Danke! Dein Foto ist in der Galerie. 🎉' : 'Foto gespeichert (Demo-Modus).') + storageNote(), idbOk ? 2600 : 6000);
           go('#/tasks');
         }).catch(function (e) {
-          toast('Konnte nicht gespeichert werden: ' + e.message, 4200);
+          toast('Das Foto ließ sich nicht senden: ' + e.message +
+            ' Versuch es bitte noch einmal.', 6000);
           render();
         });
       };
@@ -941,6 +993,7 @@
       '<input id="sbb" type="text" value="' + esc(SB.bucket || 'eventpic') + '">' +
       '<div class="row" style="margin-top:14px"><button class="btn" id="save">Speichern &amp; prüfen</button></div>' +
       '<div class="hint">Status: ' + (online() ? '✅ verbunden mit ' + esc(SB.url) : '⚠️ Demo-Modus (nur lokal)') +
+      '<br>Zwischenspeicher (Offline-Warteschlange): ' + (idbOk ? '✅ nutzbar' : '⚠️ nicht nutzbar — Fotos gehen nur direkt raus') +
       (state.fetchError ? '<br>Letzter Fehler: ' + esc(state.fetchError) : '') + '</div>' +
       '<div class="banner" style="margin-top:12px">Bitte ein <b>eigenes</b> Supabase-Projekt nur für dieses Fest ' +
       'verwenden – nicht das einer anderen App. Der Anon-Key liegt bei jedem Gast im Browser und gilt für das ' +
@@ -992,7 +1045,8 @@
       'Bei vielen Fotos dauert das einen Moment – Seite offen lassen.</div>' +
       '<div class="row" style="margin-top:14px">' +
       '<button class="btn sec2 sm" id="slide">▶ Slideshow starten</button>' +
-      '<button class="btn sec2 sm" id="reload">↻ Neu laden</button></div>' +
+      '<button class="btn sec2 sm" id="reload">↻ Neu laden</button>' +
+      '<button class="btn sec2 sm" id="resetmine">Meinen Fortschritt zurücksetzen</button></div>' +
       '</div>';
 
     /* Moderation */
@@ -1052,6 +1106,11 @@
     $('#slide').onclick = function () { go('#/slideshow'); };
     $('#reload').onclick = function () { refresh(true).then(function () { toast('Aktualisiert.'); }); };
     $('#zip').onclick = function () { downloadZip(this); };
+    $('#resetmine').onclick = function () {
+      if (!confirm('Deine Häkchen auf diesem Gerät zurücksetzen? Hochgeladene Fotos bleiben.')) return;
+      state.mine = {}; lsSet(LS.mine, state.mine);
+      toast('Fortschritt zurückgesetzt.'); render();
+    };
 
     $('#mod').onclick = function () {
       var pin = ($('#pin').value || '').trim();

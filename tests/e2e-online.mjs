@@ -15,6 +15,7 @@ const PHOTO = new URL('../icons/icon-512.png', import.meta.url).pathname;
 const fails = [];
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FAIL ') + m); if (!c) fails.push(m); };
 
+await fetch(API + '/__reset').catch(() => {});   // Mock-Zustand leeren
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 414, height: 896 }, locale: 'de-DE' });
 const errors = [];

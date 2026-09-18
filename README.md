@@ -199,6 +199,12 @@ node tests/mock-supabase.mjs 8305 --reject-auth &
 EP_API=http://127.0.0.1:8300 node tests/e2e-online.mjs
 EP_API=http://127.0.0.1:8305 node tests/e2e-online.mjs
 
+# Zwei Regressionstests fuer echte Geraetefehler:
+#  - IndexedDB komplett gesperrt (privater Modus)
+#  - Verbindung bricht waehrend des Kameragangs ab (iOS)
+EP_API=http://127.0.0.1:8300 node tests/e2e-nostorage.mjs
+EP_API=http://127.0.0.1:8300 node tests/e2e-idb-closing.mjs
+
 # Kompletter Gast-Flow im echten Chromium (Playwright)
 npx http-server -p 8199 -s . &
 PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node tests/e2e.mjs

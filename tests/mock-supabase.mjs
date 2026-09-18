@@ -33,6 +33,9 @@ const server = createServer(async (req, res) => {
 
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
 
+  // Nur fuer Tests: Zustand leeren, damit Laeufe sich nicht beeinflussen
+  if (path === '/__reset') { rows.length = 0; objects.clear(); return json(res, 200, { reset: true }); }
+
   // Oeffentlicher Bucket: ohne Schluessel lesbar. Muss so sein, denn ein
   // <img src="..."> kann keine Header mitschicken.
   const isPublicRead = req.method === 'GET' && path.startsWith('/storage/v1/object/public/');
