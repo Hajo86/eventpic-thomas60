@@ -137,8 +137,20 @@
     return sbUrl('/storage/v1/object/public/' + encodeURIComponent(SB.bucket || 'eventpic') + '/' +
       path.split('/').map(encodeURIComponent).join('/'));
   }
+  // "Failed to fetch" heißt: die Anfrage ging gar nicht erst raus (Adresse falsch,
+  // kein Netz, oder die Seite läuft in einer Sandbox ohne externe Verbindungen).
+  function netError(e) {
+    var m = (e && e.message) || String(e);
+    if (/failed to fetch|networkerror|load failed|network request failed/i.test(m)) {
+      return new Error('Keine Verbindung zum Server. Mögliche Gründe: die Adresse stimmt nicht, ' +
+        'das Gerät ist offline — oder diese Seite läuft in einer Vorschau, die keine externen ' +
+        'Verbindungen zulässt. Auf der endgültigen Adresse funktioniert es.');
+    }
+    return e;
+  }
+
   function sbFetch(path, opts) {
-    return fetch(sbUrl(path), opts).then(function (r) {
+    return fetch(sbUrl(path), opts).catch(function (e) { throw netError(e); }).then(function (r) {
       if (authFallback(r, opts)) return sbFetch(path, opts);
       if (!r.ok) return r.text().then(function (t) { throw new Error(r.status + ' ' + t.slice(0, 200)); });
       return r.status === 204 ? null : r.json().catch(function () { return null; });
@@ -166,7 +178,7 @@
         body: blob,
       };
       function send() {
-        return fetch(url, opts).then(function (r) {
+        return fetch(url, opts).catch(function (e) { throw netError(e); }).then(function (r) {
           if (authFallback(r, opts)) return send();
           if (!r.ok) return r.text().then(function (t) { throw new Error('Upload ' + r.status + ' ' + t.slice(0, 160)); });
           return true;
@@ -1019,7 +1031,7 @@
         toast('Verbindung steht ✅');
         return flush();
       }).then(function () { return refresh(true); })
-        .catch(function (e) { toast('Verbindung fehlgeschlagen: ' + e.message, 5000); state.fetchError = e.message; render(); });
+        .catch(function (e) { toast('Verbindung fehlgeschlagen: ' + e.message, 9000); state.fetchError = e.message; render(); });
     };
 
     try { window.QR.toCanvas(link, $('#qrc'), { scale: 7, dark: '#000', light: '#fff' }); }
