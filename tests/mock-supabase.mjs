@@ -57,6 +57,13 @@ const server = createServer(async (req, res) => {
     return res.end(buf);
   }
 
+  // ---- Storage: loeschen ----
+  if (req.method === 'DELETE' && path.startsWith('/storage/v1/object/eventpic/')) {
+    const key = path.replace('/storage/v1/object/eventpic/', '');
+    const had = objects.delete(key);
+    return json(res, had ? 200 : 404, { deleted: had });
+  }
+
   // ---- Storage: hochladen ----
   if (req.method === 'POST' && path.startsWith('/storage/v1/object/eventpic/')) {
     const key = path.replace('/storage/v1/object/eventpic/', '');
@@ -109,8 +116,9 @@ const server = createServer(async (req, res) => {
     if (fn === 'ep_admin_delete') {
       if (!needPin()) return;
       const i = rows.findIndex(r => r.id === a.p_id);
-      if (i >= 0) { objects.delete(rows[i].path); rows.splice(i, 1); }
-      return json(res, 200, null);
+      let p = null;
+      if (i >= 0) { p = rows[i].path; rows.splice(i, 1); }
+      return json(res, 200, p);        // gibt den Pfad zurueck, loescht die Datei NICHT
     }
     return json(res, 404, { message: 'Could not find the function ' + fn });
   }

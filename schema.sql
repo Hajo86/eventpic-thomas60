@@ -143,9 +143,15 @@ begin
 end;
 $$;
 
--- 4e. Admin: Foto endgültig löschen (Datenbankzeile + Storage-Eintrag)
+-- 4e. Admin: Foto löschen.
+--     Löscht die Datenbankzeile — damit ist das Foto aus Galerie, Slideshow
+--     und Download verschwunden. Die Bilddatei im Storage wird NICHT von hier
+--     gelöscht: Supabase verbietet das direkte Löschen in storage.objects
+--     ("Direct deletion from storage tables is not allowed"). Die App versucht
+--     anschließend die Storage-API; klappt das nicht, bleibt die Datei bis zum
+--     Aufräumen nach dem Fest liegen (siehe Abschnitt 9).
 create or replace function public.ep_admin_delete(p_pin text, p_id uuid)
-returns void
+returns text
 language plpgsql
 security definer
 set search_path = public, pg_temp
@@ -155,9 +161,7 @@ begin
   if not eventpic_private.pin_ok(p_pin, null) then raise exception 'PIN falsch'; end if;
   select path into p from public.event_photos where id = p_id;
   delete from public.event_photos where id = p_id;
-  if p is not null then
-    delete from storage.objects where bucket_id = 'eventpic' and name = p;
-  end if;
+  return p;
 end;
 $$;
 
@@ -245,9 +249,14 @@ select event_id, pin from eventpic_private.admin;    -- zeigt, was wirklich drin
 -- ---------------------------------------------------------------------------
 -- 9. Nach dem Fest: aufräumen (bewusst manuell)
 -- ---------------------------------------------------------------------------
--- Erst die Fotos herunterladen (Admin-Bereich → "Alle Fotos als ZIP"), dann:
+-- Erst die Fotos herunterladen (Admin-Bereich → "Alle Fotos als ZIP").
 --
---   delete from storage.objects where bucket_id = 'eventpic';
+-- Dann die Datenbankzeilen:
 --   delete from public.event_photos where event_id = 'thomas60-2026';
 --
--- Oder das gesamte Supabase-Projekt löschen.
+-- Die Bilddateien lassen sich per SQL NICHT löschen. Zwei Wege:
+--   a) Supabase → Storage → Bucket "eventpic" → Ordner auswählen → Delete
+--   b) Den ganzen Bucket löschen (Storage → eventpic → Einstellungen → Delete)
+--
+-- Am einfachsten: das gesamte Supabase-Projekt löschen, wenn es nur für
+-- dieses Fest angelegt wurde.

@@ -223,6 +223,16 @@
       }
       return send();
     },
+    removeObject: function (path) {
+      return fetch(sbUrl('/storage/v1/object/' + encodeURIComponent(SB.bucket || 'eventpic') + '/' +
+        String(path).split('/').map(encodeURIComponent).join('/')), {
+        method: 'DELETE',
+        headers: sbHeaders(),
+      }).then(function (r) {
+        if (!r.ok) throw new Error('Storage-Löschen ' + r.status);
+        return true;
+      });
+    },
     rpc: function (name, args) {
       return sbFetch('/rest/v1/rpc/' + name, {
         method: 'POST',
@@ -1402,9 +1412,13 @@
     Array.prototype.forEach.call(box.querySelectorAll('[data-x]'), function (b) {
       b.onclick = function () {
         if (!confirm('Foto endgültig löschen?')) return;
-        api.rpc('ep_admin_delete', { p_pin: lsGet(LS.pin, ''), p_id: b.dataset.x }).then(function () {
+        api.rpc('ep_admin_delete', { p_pin: lsGet(LS.pin, ''), p_id: b.dataset.x }).then(function (path) {
           adminRows = adminRows.filter(function (r) { return r.id !== b.dataset.x; });
           renderModList(); refresh(true); toast('Gelöscht.');
+          // Die Bilddatei zusätzlich über die Storage-API entfernen. Ohne
+          // Löschrecht schlägt das fehl — das Foto ist trotzdem überall weg,
+          // die Datei verschwindet dann beim Aufräumen nach dem Fest.
+          if (path) api.removeObject(path).catch(function () {});
         }).catch(function (e) { toast('Fehler: ' + e.message, 4200); });
       };
     });
