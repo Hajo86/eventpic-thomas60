@@ -31,7 +31,7 @@ window.EVENT = {
   // einfügen, sonst nichts (siehe schema.sql).
   // NIEMALS hier eintragen: service_role- oder secret-Schlüssel.
   supabaseUrl: 'https://futdxrnvbdaofdhyaicy.supabase.co',
-  supabaseKey: '',          // <<< sb_publishable_... hier eintragen
+  supabaseKey: 'sb_publishable_sZiwf2UNYoFtVczGSSlJXQ_sATOiwCp',
   supabaseBucket: 'eventpic',
 
   title: 'Thomas wird 60',
