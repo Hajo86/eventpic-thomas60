@@ -1173,11 +1173,12 @@
         lsSet(LS.sb, SB);
       }
       state.fetchError = '';
-      if (!online()) { toast('Zugangsdaten gelöscht – Demo-Modus.'); render(); return; }
+      render();                       // Felder sofort auf den neuen Stand bringen
+      if (!online()) { toast('Zugangsdaten gelöscht – Demo-Modus.'); return; }
       api.list(1).then(function () {
         toast('Verbindung steht ✅');
         return flush();
-      }).then(function () { return refresh(true); })
+      }).then(function () { return refresh(true); }).then(render)
         .catch(function (e) { toast('Verbindung fehlgeschlagen: ' + e.message, 9000); state.fetchError = e.message; render(); });
     };
 
