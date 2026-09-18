@@ -1041,7 +1041,7 @@
   /* ---- Admin ---- */
   var adminRows = null;
   function viewAdmin() {
-    var h = '<button class="btn ghost" id="back" style="margin:10px 0">‹ Zurück zur App</button>' +
+    var h = '<button class="btn sec2 sm" id="back" style="margin:12px 0">‹ Zurück zu den Aufgaben</button>' +
       '<h2>Gastgeber-Bereich</h2>' +
       '<p class="hint">Nur für dich. Änderungen hier gelten für dieses Gerät. ' +
       'Was alle Gäste betrifft, steht in <code>tasks.js</code>.</p>';
@@ -1055,7 +1055,10 @@
       '<input id="sbk" type="password" placeholder="eyJ…" value="' + esc(SB.key) + '">' +
       '<label class="f" for="sbb">Storage-Bucket</label>' +
       '<input id="sbb" type="text" value="' + esc(SB.bucket || 'eventpic') + '">' +
-      '<div class="row" style="margin-top:14px"><button class="btn" id="save">Speichern &amp; prüfen</button></div>' +
+      '<div class="row" style="margin-top:14px"><button class="btn" id="save">Speichern &amp; prüfen</button>' +
+      '<button class="btn sec2" id="sbreset">Auf App-Werte zurücksetzen</button></div>' +
+      '<div class="row" style="margin-top:10px"><button class="btn sec2" id="selftest">🔎 Selbsttest: Verbindung, Upload, Galerie</button></div>' +
+      '<div id="stout"></div>' +
       '<div class="hint">Status: ' + (online() ? '✅ verbunden mit ' + esc(SB.url) : '⚠️ Demo-Modus (nur lokal)') +
       (lsGet(LS.sb, null) ? '<br>Quelle: Eingabe auf diesem Gerät (beide Felder leeren = wieder die Werte aus tasks.js)'
                           : '<br>Quelle: <code>tasks.js</code> — gilt für alle Gäste') +
@@ -1142,6 +1145,15 @@
 
     $('#back').onclick = function () { go('#/tasks'); };
 
+    $('#sbreset').onclick = function () {
+      localStorage.removeItem(LS.sb);
+      SB = defaultSB();
+      state.fetchError = '';
+      toast('Zurück auf die Werte aus tasks.js.');
+      refresh(true).then(render);
+    };
+    $('#selftest').onclick = function () { selfTest(this); };
+
     $('#save').onclick = function () {
       var u = ($('#sbu').value || '').trim().replace(/\/+$/, '');
       var k = ($('#sbk').value || '').trim();
@@ -1214,6 +1226,97 @@
       CFG = Object.assign({}, window.EVENT);
       applyCfg(); toast('Zurückgesetzt.'); render();
     };
+  }
+
+  // Prüft der Reihe nach, was am Festtag wirklich gebraucht wird, und räumt
+  // hinterher auf. Zeigt jeden Schritt einzeln, damit man sieht, wo es klemmt.
+  function selfTest(btn) {
+    var out = $('#stout'), steps = [];
+    function draw(running) {
+      out.innerHTML = '<div class="list" style="margin-top:12px">' + steps.map(function (s) {
+        return '<div class="it"><div style="width:22px;text-align:center">' + s.icon + '</div>' +
+          '<div class="g"><div class="t">' + esc(s.name) + '</div>' +
+          (s.detail ? '<div class="m">' + esc(s.detail) + '</div>' : '') + '</div></div>';
+      }).join('') + '</div>' + (running ? '<div class="hint"><span class="sp"></span> läuft …</div>' : '');
+    }
+    function step(name, fn) {
+      steps.push({ name: name, icon: '⏳', detail: '' });
+      var s = steps[steps.length - 1];
+      draw(true);
+      return fn().then(function (d) {
+        s.icon = '✅'; s.detail = d || ''; draw(true);
+      }).catch(function (e) {
+        s.icon = '❌'; s.detail = (e && e.message) || String(e); draw(true);
+        throw e;
+      });
+    }
+
+    if (!online()) {
+      out.innerHTML = '<div class="banner" style="margin-top:12px">Keine Zugangsdaten hinterlegt — ' +
+        'die App läuft nur lokal. Werte in <code>tasks.js</code> prüfen.</div>';
+      return;
+    }
+    btn.disabled = true;
+    steps = [];
+    var path = CFG.eventId + '/__selftest/' + uid() + '.jpg';
+    var rowId = uid(), blob;
+
+    step('1 · Galerie lesen', function () {
+      return api.list(400).then(function (rows) {
+        return (rows || []).length + ' Foto(s) in der Datenbank';
+      });
+    }).then(function () {
+      return step('2 · Testbild erzeugen', function () {
+        var c = document.createElement('canvas');
+        c.width = c.height = 16;
+        var g = c.getContext('2d'); g.fillStyle = '#b5892a'; g.fillRect(0, 0, 16, 16);
+        return new Promise(function (res, rej) {
+          c.toBlob(function (b) {
+            if (!b) return rej(new Error('Browser kann kein JPEG erzeugen'));
+            blob = b; res(Math.round(b.size / 1024 * 10) / 10 + ' KB');
+          }, 'image/jpeg', 0.8);
+        });
+      });
+    }).then(function () {
+      return step('3 · In den Speicher hochladen', function () {
+        return api.upload(path, blob).then(function () { return path; });
+      });
+    }).then(function () {
+      return step('4 · Eintrag in der Datenbank anlegen', function () {
+        return api.insert({
+          id: rowId, event_id: CFG.eventId, task_id: '__selftest',
+          guest_name: 'Selbsttest', path: path, owner_token: ownerToken,
+          width: 16, height: 16,
+        }).then(function () { return 'ok'; });
+      });
+    }).then(function () {
+      return step('5 · Bild öffentlich abrufbar', function () {
+        return fetch(publicUrl(path), { cache: 'no-store' }).then(function (r) {
+          if (!r.ok) throw new Error('Status ' + r.status + ' — Bucket öffentlich?');
+          return r.blob();
+        }).then(function (b) { return Math.round(b.size / 1024 * 10) / 10 + ' KB zurückgelesen'; });
+      });
+    }).then(function () {
+      return step('6 · Testeintrag wieder löschen', function () {
+        return api.rpc('ep_delete_own_photo', { p_id: rowId, p_token: ownerToken })
+          .then(function () { return 'aufgeräumt'; });
+      });
+    }).then(function () {
+      steps.push({ name: 'Alles in Ordnung — die App ist festbereit.', icon: '🎉', detail: '' });
+      draw(false);
+    }).catch(function () {
+      steps.push({
+        name: 'Abgebrochen. Der erste rote Schritt sagt, woran es liegt.',
+        icon: 'ℹ️',
+        detail: 'Schritt 1 rot → Adresse/Schlüssel prüfen. Schritt 3 oder 5 rot → Bucket ' +
+          '„eventpic" fehlt oder ist nicht öffentlich. Schritt 4 rot → schema.sql erneut ausführen.',
+      });
+      draw(false);
+    }).then(function () {
+      btn.disabled = false;
+      api.rpc('ep_delete_own_photo', { p_id: rowId, p_token: ownerToken }).catch(function () {});
+      refresh(true);
+    });
   }
 
   function renderModList() {
@@ -1299,7 +1402,9 @@
     route = parse();
     if (was === 'slideshow' && route.name !== 'slideshow') leaveSlideshow();
 
-    var chrome = ['tasks', 'gallery', 'me'].indexOf(route.name) >= 0;
+    // Die Fußleiste bleibt überall sichtbar (außer Slideshow/Start), damit man
+    // aus Admin, Aushang und Info immer mit einem Tipp zurückkommt.
+    var chrome = ['slideshow', 'start'].indexOf(route.name) < 0;
     $('#tabs').classList.toggle('hidden', !chrome);
     $('#appHeader').classList.toggle('hidden', route.name === 'slideshow' || route.name === 'start');
     Array.prototype.forEach.call($('#tabs').children, function (b) {

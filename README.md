@@ -123,7 +123,10 @@ speichern nimmt die Änderung zurück.
    (der Link steht auch unten unter „Meine Fotos" und auf der Info-Seite).
 2. Status prüfen: Es muss „Verbindung steht ✅" und „Quelle: `tasks.js` —
    gilt für alle Gäste" dastehen.
-3. **Echter Durchlauf** — das ist der eigentliche Test:
+3. **Selbsttest** im Gastgeber-Bereich drücken (🔎). Er prüft in sechs Schritten
+   Lesen, Upload, Datenbankeintrag und öffentlichen Abruf — und räumt hinter sich
+   auf. Der erste rote Schritt sagt, woran es liegt.
+4. **Echter Durchlauf** — das ist der eigentliche Test:
    - Eine Aufgabe öffnen, Foto machen, absenden.
    - Tab **Galerie**: Das Foto muss da sein.
    - **Zweites Gerät** (oder privates Fenster) mit derselben Adresse öffnen: Das Foto muss
@@ -131,7 +134,7 @@ speichern nimmt die Änderung zurück.
    - Admin → **PIN eintragen → „Alle Fotos laden"**: Liste muss kommen, „Verbergen"
      muss das Foto aus der Galerie nehmen.
    - Admin → **„Alle Fotos als ZIP herunterladen"**: Datei muss sich öffnen lassen.
-4. Vor dem Fest die Testfotos wegräumen: Admin → PIN → „Alle Fotos laden" → jedes Foto
+5. Vor dem Fest die Testfotos wegräumen: Admin → PIN → „Alle Fotos laden" → jedes Foto
    **Löschen**.
 
 #### Wenn etwas nicht geht
@@ -219,6 +222,9 @@ node tests/mock-supabase.mjs 8300 &
 node tests/mock-supabase.mjs 8305 --reject-auth &
 EP_API=http://127.0.0.1:8300 node tests/e2e-online.mjs
 EP_API=http://127.0.0.1:8305 node tests/e2e-online.mjs
+
+# Navigation aus allen Bereichen + Selbsttest im Gastgeber-Bereich
+EP_API=http://127.0.0.1:8300 node tests/e2e-selftest.mjs
 
 # Gast muss nichts einrichten (Zugangsdaten kommen aus tasks.js)
 EP_API=http://127.0.0.1:8300 node tests/e2e-defaults.mjs
