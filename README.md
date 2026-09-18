@@ -22,6 +22,7 @@ Ohne App-Installation, ohne Registrierung, ohne Werbung.
 | 🖼 **Live-Galerie** | aktualisiert sich selbst, filterbar nach Kategorie und Gast, Vollbild mit Wischen |
 | 📺 **Slideshow** | Vollbildmodus für TV/Beamer, mischt neue Fotos automatisch ein, „neu"-Badge |
 | 👤 **Meine Fotos** | jeder Gast kann eigene Fotos selbst wieder löschen |
+| 🖨 **Aushang zum Ausdrucken** | fertige A4-Seite oder vier Tischkarten, QR und Kurzanleitung, druckfertig aus dem Browser (`#/print`) |
 | 🔑 **Gastgeber-Bereich** | QR-Code-Generator, Live-Zahlen, Moderation, ZIP-Download aller Fotos |
 | 📦 **0 € Betrieb** | GitHub Pages + Supabase Free Tier |
 
@@ -189,6 +190,14 @@ node tests/qr-test.mjs
 
 # ZIP-Writer: gegen Pythons zipfile geprüft
 node tests/zip-test.mjs && python3 -c "import zipfile;print(zipfile.ZipFile('/tmp/eventpic-test.zip').testzip())"
+
+# Online-Pfad gegen einen Fake-Supabase: Upload, Storage, zweites Geraet,
+# Moderation, falsche PIN. Zweiter Lauf prueft Schluessel, die den
+# Authorization-Header ablehnen (neue "Publishable Keys").
+node tests/mock-supabase.mjs 8300 &
+node tests/mock-supabase.mjs 8305 --reject-auth &
+EP_API=http://127.0.0.1:8300 node tests/e2e-online.mjs
+EP_API=http://127.0.0.1:8305 node tests/e2e-online.mjs
 
 # Kompletter Gast-Flow im echten Chromium (Playwright)
 npx http-server -p 8199 -s . &

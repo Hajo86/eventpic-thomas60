@@ -169,6 +169,43 @@ nav.tabs button[aria-current=page]{color:var(--accent)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .big-num{font-size:3rem;font-weight:800;letter-spacing:-.03em;color:var(--accent);line-height:1}
 footer.mini{color:var(--muted);font-size:.75rem;text-align:center;padding:24px 0 8px}
+/* ---------- Druckansicht (#/print) ---------- */
+.psetup{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:12px 0 18px}
+.psetup .f2{flex:1;min-width:220px}
+.sheet{background:#fff;color:#111;border:1px solid var(--line);border-radius:12px;
+  padding:26px 22px;margin:0 0 16px;text-align:center}
+.sheet .kicker{font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;color:#8a8580;font-weight:700}
+.sheet h2.big{font-size:2.1rem;margin:6px 0 2px;color:#111;letter-spacing:-.02em}
+.sheet .lead{font-size:1.05rem;color:#3c3934;margin:0 0 14px}
+.sheet canvas{width:58mm;max-width:80%;height:auto;image-rendering:pixelated;display:block;margin:6px auto}
+.sheet .url{font-size:.78rem;color:#6d6a66;word-break:break-all;margin:8px 0 14px}
+.sheet ol{text-align:left;max-width:330px;margin:0 auto;padding-left:22px;color:#111;line-height:1.55}
+.sheet ol li{margin:5px 0}
+.sheet .foot{margin:16px 0 0;font-size:.8rem;color:#6d6a66;line-height:1.45}
+.sheet .rule{height:1px;background:#e7e1d9;margin:16px 0}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cards .sheet{padding:16px 12px;margin:0}
+.cards .sheet h2.big{font-size:1.3rem}
+.cards .sheet .lead{font-size:.85rem;margin-bottom:8px}
+.cards .sheet canvas{width:34mm}
+.cards .sheet ol{font-size:.78rem;max-width:none;padding-left:18px}
+.cards .sheet .url{font-size:.65rem;margin:6px 0 8px}
+@media print{
+  @page{size:A4;margin:12mm}
+  header.app,nav.tabs,.no-print,.toast{display:none !important}
+  html,body{background:#fff !important;color:#000 !important;padding:0 !important;margin:0 !important}
+  .wrap{max-width:none;padding:0}
+  .sheet{border:0;border-radius:0;box-shadow:none;page-break-inside:avoid;break-inside:avoid;
+    background:#fff !important;color:#000 !important}
+  .sheet.poster{padding:0;min-height:245mm;display:flex;flex-direction:column;justify-content:center}
+  .sheet.poster h2.big{font-size:34pt}
+  .sheet.poster .lead{font-size:15pt}
+  .sheet.poster canvas{width:82mm}
+  .sheet.poster ol{font-size:13pt;max-width:110mm}
+  .cards{gap:8mm}
+  .cards .sheet{border:1px dashed #bbb;padding:6mm;min-height:118mm;
+    display:flex;flex-direction:column;justify-content:center}
+}
 @media (prefers-color-scheme:dark){
   :root:not([data-theme=light]){
     --bg:#141311;--card:#1e1c1a;--ink:#f4f1ec;--muted:#a8a29a;--line:#302d29;

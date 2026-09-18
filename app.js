@@ -117,8 +117,21 @@
   var SB = lsGet(LS.sb, { url: '', key: '', bucket: 'eventpic' });
   function online() { return !!(SB.url && SB.key); }
   function sbUrl(p) { return String(SB.url).replace(/\/+$/, '') + p; }
+  // Manche Schlüsselarten (neue "Publishable Keys") werden nur im apikey-Header
+  // akzeptiert. Kommt einmal ein 401 mit Authorization-Header zurück, schalten
+  // wir ihn dauerhaft ab und wiederholen die Anfrage.
+  var noAuthHeader = false;
   function sbHeaders(extra) {
-    return Object.assign({ apikey: SB.key, Authorization: 'Bearer ' + SB.key }, extra || {});
+    var h = Object.assign({ apikey: SB.key }, extra || {});
+    if (!noAuthHeader) h.Authorization = 'Bearer ' + SB.key;
+    return h;
+  }
+  function authFallback(res, opts) {
+    if (res.status !== 401 || noAuthHeader) return false;
+    if (!opts || !opts.headers || !opts.headers.Authorization) return false;
+    noAuthHeader = true;
+    delete opts.headers.Authorization;
+    return true;
   }
   function publicUrl(path) {
     return sbUrl('/storage/v1/object/public/' + encodeURIComponent(SB.bucket || 'eventpic') + '/' +
@@ -126,6 +139,7 @@
   }
   function sbFetch(path, opts) {
     return fetch(sbUrl(path), opts).then(function (r) {
+      if (authFallback(r, opts)) return sbFetch(path, opts);
       if (!r.ok) return r.text().then(function (t) { throw new Error(r.status + ' ' + t.slice(0, 200)); });
       return r.status === 204 ? null : r.json().catch(function () { return null; });
     });
@@ -144,15 +158,21 @@
       }).then(function (r) { return Array.isArray(r) ? r[0] : r; });
     },
     upload: function (path, blob) {
-      return fetch(sbUrl('/storage/v1/object/' + encodeURIComponent(SB.bucket || 'eventpic') + '/' +
-        path.split('/').map(encodeURIComponent).join('/')), {
+      var url = sbUrl('/storage/v1/object/' + encodeURIComponent(SB.bucket || 'eventpic') + '/' +
+        path.split('/').map(encodeURIComponent).join('/'));
+      var opts = {
         method: 'POST',
         headers: sbHeaders({ 'Content-Type': 'image/jpeg', 'x-upsert': 'true', 'cache-control': '3600' }),
         body: blob,
-      }).then(function (r) {
-        if (!r.ok) return r.text().then(function (t) { throw new Error('Upload ' + r.status + ' ' + t.slice(0, 160)); });
-        return true;
-      });
+      };
+      function send() {
+        return fetch(url, opts).then(function (r) {
+          if (authFallback(r, opts)) return send();
+          if (!r.ok) return r.text().then(function (t) { throw new Error('Upload ' + r.status + ' ' + t.slice(0, 160)); });
+          return true;
+        });
+      }
+      return send();
     },
     rpc: function (name, args) {
       return sbFetch('/rest/v1/rpc/' + name, {
@@ -810,6 +830,65 @@
     if (slide.lock) { try { slide.lock.release(); } catch (e) {} slide.lock = null; }
   }
 
+  /* ---- Druckansicht: Aushang + Tischkarten ---- */
+  var printCfg = { mode: 'poster', url: '' };
+  function guestUrl() {
+    return printCfg.url || location.href.split('#')[0];
+  }
+  function sheetHtml(compact) {
+    var u = guestUrl().replace(/^https?:\/\//, '');
+    return '<div class="sheet' + (compact ? '' : ' poster') + '">' +
+      '<div class="kicker">Fotoaufgaben</div>' +
+      '<h2 class="big">' + esc(CFG.title || '') + '</h2>' +
+      '<div class="lead">Sei heute unser Fotograf' + (compact ? '' : ':in') + '!</div>' +
+      '<canvas class="qrc"></canvas>' +
+      '<div class="url">' + esc(u) + '</div>' +
+      '<ol>' +
+      '<li>Handy-Kamera auf den Code halten</li>' +
+      '<li>Aufgabe aussuchen, Foto machen</li>' +
+      '<li>Absenden — fertig</li>' +
+      '</ol>' +
+      (compact ? '' : '<div class="rule"></div>') +
+      '<div class="foot">Keine App, keine Anmeldung, kein Konto.<br>' +
+      'Alle Fotos zusammen sind unser Geschenk für ' + esc(CFG.honoree || 'das Geburtstagskind') + '.' +
+      (compact ? '' : '<br>Fotos von Kindern bitte nur mit Einverständnis der Eltern.') +
+      '</div></div>';
+  }
+  function viewPrint() {
+    var h = '<div class="no-print">' +
+      '<button class="btn ghost" id="back" style="margin:10px 0">‹ Zurück zur App</button>' +
+      '<h2>Aushang drucken</h2>' +
+      '<p class="hint">Der QR-Code wird aus der Adresse unten erzeugt. Solange die App noch ' +
+      'nicht endgültig online ist, trag hier die spätere Adresse ein — dann stimmt der Ausdruck.</p>' +
+      '<div class="psetup">' +
+      '<div class="f2"><label class="f" for="purl">Adresse für die Gäste</label>' +
+      '<input id="purl" type="text" value="' + esc(guestUrl()) + '"></div></div>' +
+      '<div class="filters" id="pf">' +
+      '<button data-m="poster" aria-pressed="' + (printCfg.mode === 'poster') + '">Aushang A4</button>' +
+      '<button data-m="cards" aria-pressed="' + (printCfg.mode === 'cards') + '">Tischkarten (4 pro Seite)</button>' +
+      '</div>' +
+      '<div class="row" style="margin:12px 0 18px">' +
+      '<button class="btn" id="doprint">🖨 Drucken</button></div>' +
+      '</div>';
+    h += printCfg.mode === 'cards'
+      ? '<div class="cards">' + sheetHtml(true) + sheetHtml(true) + sheetHtml(true) + sheetHtml(true) + '</div>'
+      : sheetHtml(false);
+    h += '<footer class="mini no-print">Tipp: im Druckdialog „Hintergrundgrafiken" nicht nötig — ' +
+      'der Aushang ist bewusst schwarz-weiß-tauglich.</footer>';
+    view.innerHTML = h;
+
+    Array.prototype.forEach.call(view.querySelectorAll('canvas.qrc'), function (c) {
+      try { window.QR.toCanvas(guestUrl(), c, { scale: 8, quiet: 2 }); }
+      catch (e) { c.outerHTML = '<div class="hint">QR nicht erzeugbar: ' + esc(e.message) + '</div>'; }
+    });
+    $('#back').onclick = function () { go('#/admin'); };
+    $('#doprint').onclick = function () { window.print(); };
+    $('#purl').onchange = function () { printCfg.url = this.value.trim(); render(); };
+    Array.prototype.forEach.call(view.querySelectorAll('#pf button'), function (b) {
+      b.onclick = function () { printCfg.mode = b.dataset.m; render(); };
+    });
+  }
+
   /* ---- Admin ---- */
   var adminRows = null;
   function viewAdmin() {
@@ -843,7 +922,8 @@
       '<div class="hint" style="word-break:break-all">' + esc(link) + '</div>' +
       '<div class="row" style="margin-top:12px">' +
       '<button class="btn sec2 sm" id="qrdl">QR als Bild speichern</button>' +
-      '<button class="btn sec2 sm" id="cplink">Link kopieren</button></div>' +
+      '<button class="btn sec2 sm" id="cplink">Link kopieren</button>' +
+      '<button class="btn sec2 sm" id="goprint">Aushang drucken</button></div>' +
       '<div class="hint">Erzeugt direkt im Browser – die Adresse wird an keinen Dienst geschickt. ' +
       'Bitte einmal mit der Handykamera testen, bevor du ihn aufhängst.</div>' +
       '</div>';
@@ -931,6 +1011,7 @@
       else toast(link, 6000);
     };
 
+    $('#goprint').onclick = function () { go('#/print'); };
     $('#slide').onclick = function () { go('#/slideshow'); };
     $('#reload').onclick = function () { refresh(true).then(function () { toast('Aktualisiert.'); }); };
     $('#zip').onclick = function () { downloadZip(this); };
@@ -1068,6 +1149,7 @@
       case 'me': viewMe(); break;
       case 'info': viewInfo(); break;
       case 'admin': viewAdmin(); break;
+      case 'print': viewPrint(); break;
       case 'slideshow': if (!$('#slideshow')) viewSlideshow(); break;
       default: viewTasks();
     }
