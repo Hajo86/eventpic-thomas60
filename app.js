@@ -274,17 +274,25 @@
       });
     });
   }
+  // Der Gastgeber-Bereich, der Aushang und die Infoseite duerfen NICHT bei
+  // jedem Galerie-Abruf neu gezeichnet werden — sonst verschwinden Eingaben,
+  // Selbsttest-Ausgaben und die Scrollposition alle paar Sekunden.
+  function renderIfLive() {
+    if (['admin', 'print', 'info', 'start'].indexOf(route.name) >= 0) return;
+    render();
+  }
+
   function refresh(force) {
-    if (!online()) return loadDemoPhotos().then(render);
+    if (!online()) return loadDemoPhotos().then(renderIfLive);
     if (!force && Date.now() - state.lastFetch < 4000) return Promise.resolve();
     state.lastFetch = Date.now();
     return api.list().then(function (rows) {
       state.photos = rows || [];
       state.fetchError = '';
-      render();
+      renderIfLive();
     }).catch(function (e) {
       state.fetchError = e.message;
-      render();
+      renderIfLive();
     });
   }
 
@@ -1209,6 +1217,7 @@
       }).catch(function (e) { toast('PIN falsch oder Setup fehlt: ' + e.message, 5000); });
     };
     if (adminRows) renderModList();
+    if (selfSteps) drawSelfSteps(false);
 
     $('#csave').onclick = function () {
       var over = {
@@ -1230,14 +1239,26 @@
 
   // Prüft der Reihe nach, was am Festtag wirklich gebraucht wird, und räumt
   // hinterher auf. Zeigt jeden Schritt einzeln, damit man sieht, wo es klemmt.
+  var selfSteps = null;          // bleibt erhalten, auch wenn die Ansicht neu gezeichnet wird
+  function drawSelfSteps(running) {
+    var out = $('#stout');
+    if (!out || !selfSteps) return;
+    out.innerHTML = selfStepsHtml(running);
+  }
+  function selfStepsHtml(running) {
+    return '<div class="list" style="margin-top:12px">' + selfSteps.map(function (s) {
+      return '<div class="it"><div style="width:22px;text-align:center">' + s.icon + '</div>' +
+        '<div class="g"><div class="t">' + esc(s.name) + '</div>' +
+        (s.detail ? '<div class="m">' + esc(s.detail) + '</div>' : '') + '</div></div>';
+    }).join('') + '</div>' + (running ? '<div class="hint"><span class="sp"></span> läuft …</div>' : '');
+  }
   function selfTest(btn) {
     var out = $('#stout'), steps = [];
+    selfSteps = steps;
     function draw(running) {
-      out.innerHTML = '<div class="list" style="margin-top:12px">' + steps.map(function (s) {
-        return '<div class="it"><div style="width:22px;text-align:center">' + s.icon + '</div>' +
-          '<div class="g"><div class="t">' + esc(s.name) + '</div>' +
-          (s.detail ? '<div class="m">' + esc(s.detail) + '</div>' : '') + '</div></div>';
-      }).join('') + '</div>' + (running ? '<div class="hint"><span class="sp"></span> läuft …</div>' : '');
+      out = $('#stout');
+      if (!out) return;
+      out.innerHTML = selfStepsHtml(running);
     }
     function step(name, fn) {
       steps.push({ name: name, icon: '⏳', detail: '' });
@@ -1257,7 +1278,7 @@
       return;
     }
     btn.disabled = true;
-    steps = [];
+    selfSteps = steps = [];      // beide muessen auf DASSELBE Feld zeigen
     var path = CFG.eventId + '/__selftest/' + uid() + '.jpg';
     var rowId = uid(), blob;
 
@@ -1302,7 +1323,24 @@
           .then(function () { return 'aufgeräumt'; });
       });
     }).then(function () {
-      steps.push({ name: 'Alles in Ordnung — die App ist festbereit.', icon: '🎉', detail: '' });
+      var pin = (($('#pin') || {}).value || '').trim();
+      if (!pin) {
+        steps.push({ name: '7 · Admin-PIN', icon: 'ℹ️',
+          detail: 'Übersprungen — trag die PIN oben unter „Moderation" ein und starte erneut.' });
+        return;
+      }
+      return step('7 · Admin-PIN prüfen', function () {
+        return api.rpc('ep_admin_list', { p_pin: pin, p_event: CFG.eventId })
+          .then(function (rows) { return 'PIN stimmt · ' + ((rows || []).length) + ' Foto(s) sichtbar'; });
+      }).catch(function () {});
+    }).then(function () {
+      if (steps.length && steps[steps.length - 1].icon === '❌') {
+        steps.push({ name: 'PIN wird abgelehnt', icon: 'ℹ️',
+          detail: 'Im SQL-Editor prüfen: select * from eventpic_private.admin; ' +
+            'Dort muss event_id = ' + CFG.eventId + ' stehen und die PIN exakt so, wie du sie eintippst.' });
+      } else {
+        steps.push({ name: 'Alles in Ordnung — die App ist festbereit.', icon: '🎉', detail: '' });
+      }
       draw(false);
     }).catch(function () {
       steps.push({

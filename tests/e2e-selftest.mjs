@@ -39,13 +39,19 @@ ok(true, 'Zurueck-Knopf im Gastgeber-Bereich funktioniert');
 // --- Selbsttest ---
 await p.goto(BASE + '#/admin');
 await p.waitForSelector('#selftest');
+await p.fill('#pin', 'Hajo86');
 await p.click('#selftest');
-await p.waitForSelector('#stout .it:nth-child(7)', { timeout: 20000 });
+await p.waitForSelector('#stout .it:nth-child(8)', { timeout: 25000 });
 const rows = await p.locator('#stout .it .t').allTextContents();
 const icons = await p.locator('#stout .it > div:first-child').allTextContents();
 rows.forEach((r, i) => console.log('      ' + icons[i] + ' ' + r));
-ok(icons.filter(i => i.includes('✅')).length === 6, 'Alle sechs Schritte gruen');
+ok(icons.filter(i => i.includes('✅')).length === 7, 'Alle sieben Schritte gruen (inkl. PIN)');
 ok(icons.some(i => i.includes('🎉')), 'Abschlussmeldung "festbereit"');
+
+await p.evaluate(() => window.EP.refresh(true));
+await p.waitForTimeout(1200);
+ok((await p.locator('#stout .it').count()) >= 7, 'Ergebnis ueberlebt die Galerie-Aktualisierung');
+ok(await p.locator('#pin').inputValue() === 'Hajo86', 'Eingaben bleiben beim Aktualisieren stehen');
 
 // Der Testeintrag darf nicht in der Galerie liegenbleiben
 await p.goto(BASE + '#/gallery');
