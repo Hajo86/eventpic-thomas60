@@ -17,10 +17,11 @@ window.EVENT = {
   // in derselben Datenbank. Nur ändern, wenn du bei Null anfangen willst.
   eventId: 'thomas60-2026',
 
-  // Adresse, die im QR-Code landet. Leer lassen = die Adresse der laufenden
-  // Seite. Hier eingetragen, damit ein Ausdruck auch dann stimmt, wenn du die
-  // Seite gerade lokal oder in einer Vorschau geöffnet hast.
-  guestUrl: 'https://hajo86.github.io/eventpic-thomas60/',
+  // Ersatzadresse für den QR-Code. Wird NUR gebraucht, wenn die App gerade in
+  // einer Vorschau oder lokal läuft — auf der echten Seite nimmt die App ihre
+  // eigene Adresse. Nach einem Umbenennen des Repositorys stimmt der QR also
+  // von allein.
+  guestUrl: 'https://hajo86.github.io/thomas-jubelt/',
 
   // --- Supabase: gilt für ALLE Gäste -------------------------------------
   // Diese beiden Werte müssen hier stehen, sonst müsste sie jeder Gast auf

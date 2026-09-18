@@ -969,7 +969,16 @@
 
   /* ---- Gäste-Adresse (steckt im QR-Code) ---- */
   function ownUrl() { return location.href.split('#')[0]; }
-  function guestUrl() { return lsGet(LS.url, '') || CFG.guestUrl || ownUrl(); }
+  // Reihenfolge bewusst so: eigene Eingabe > echte Adresse der Seite >
+  // Voreinstellung aus tasks.js. Damit stimmt der QR-Code auch dann, wenn das
+  // Repository (und damit die Adresse) später umbenannt wird — nur in einer
+  // Vorschau greift der hinterlegte Wert.
+  function guestUrl() {
+    var stored = lsGet(LS.url, '');
+    if (stored) return stored;
+    if (!isPreviewHost()) return ownUrl();
+    return CFG.guestUrl || ownUrl();
+  }
   function setGuestUrl(u) {
     u = (u || '').trim();
     if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u;
@@ -1007,9 +1016,16 @@
       '<li>Absenden — fertig</li>' +
       '</ol>' +
       (compact ? '' : '<div class="rule"></div>') +
-      '<div class="foot">Keine App, keine Anmeldung, kein Konto.<br>' +
+      '<div class="foot">Keine Anmeldung, kein Konto, nichts zu installieren.<br>' +
       'Alle Fotos zusammen sind unser Geschenk für ' + esc(CFG.honoree || 'das Geburtstagskind') + '.' +
       (compact ? '' : '<br>Fotos von Kindern bitte nur mit Einverständnis der Eltern.') +
+      '</div>' +
+      '<div class="save">' +
+      '<b>Tipp: als App aufs Handy legen</b><br>' +
+      '<b>iPhone:</b> unten in Safari auf <b>Teilen</b> ⬆︎ tippen, dann ' +
+      '<b>„Zum Home-Bildschirm"</b>.' +
+      (compact ? '' : '<br><b>Android:</b> in Chrome oben rechts auf <b>⋮</b>, dann ' +
+        '<b>„App installieren"</b> bzw. „Zum Startbildschirm hinzufügen".') +
       '</div></div>';
   }
   function viewPrint() {
