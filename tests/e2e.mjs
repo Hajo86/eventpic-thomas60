@@ -6,6 +6,15 @@ const ok = (c, m) => { console.log((c ? 'OK   ' : 'FAIL ') + m); if (!c) fails.p
 
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 414, height: 896 }, deviceScaleFactor: 2, locale: 'de-DE' });
+// Dieser Test prueft ausdruecklich den Betrieb OHNE Backend. Da tasks.js
+// inzwischen echte Zugangsdaten enthaelt, werden sie hier herausgefiltert.
+await ctx.route('**/tasks.js', async route => {
+  const res = await route.fetch();
+  const body = (await res.text())
+    .replace(/supabaseUrl: '[^']*'/, "supabaseUrl: ''")
+    .replace(/supabaseKey: '[^']*'/, "supabaseKey: ''");
+  route.fulfill({ response: res, body });
+});
 const page = await ctx.newPage();
 const errors = [];
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
