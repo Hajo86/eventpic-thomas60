@@ -55,6 +55,7 @@ const st = await g1.evaluate(() => ({
 ok(st.n === 1, 'Server liefert 1 Foto zurueck (' + st.n + ')');
 ok(!st.err, 'Kein Lesefehler: ' + (st.err || 'keiner'));
 ok(st.p && st.p.guest_name === 'Anna' && st.p.caption === 'Prost!', 'Gastname und Kommentar gespeichert');
+ok(st.p && st.p.owner_token === undefined, 'Galerie liefert keinen owner_token an andere Gaeste');
 ok(st.p && /^thomas60-2026\/t01\/.+\.jpg$/.test(st.p.path), 'Storage-Pfad korrekt: ' + (st.p && st.p.path));
 
 // Das Bild muss ueber die oeffentliche URL wirklich ladbar sein

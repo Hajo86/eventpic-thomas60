@@ -83,11 +83,20 @@ const server = createServer(async (req, res) => {
   // ---- REST: Zeilen lesen ----
   if (req.method === 'GET' && path === '/rest/v1/event_photos') {
     const ev = (url.searchParams.get('event_id') || '').replace('eq.', '');
+    const tok = (url.searchParams.get('owner_token') || '').replace('eq.', '');
     const limit = Number(url.searchParams.get('limit') || 400);
-    const out = rows
-      .filter(r => r.event_id === ev && !r.hidden)
-      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
-      .slice(0, limit);
+    // Eigene Fotos: auch verborgene. Galerie: nur sichtbare.
+    let out = rows.filter(r => r.event_id === ev);
+    if (tok) out = out.filter(r => r.owner_token === tok);
+    else out = out.filter(r => !r.hidden);
+    out = out.sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).slice(0, limit);
+    // Spaltenauswahl nachbilden, damit der Test merkt, wenn owner_token
+    // versehentlich wieder in der Galerie landet.
+    const sel = url.searchParams.get('select') || '*';
+    if (sel !== '*') {
+      const cols = sel.split(',').map(s => s.trim());
+      out = out.map(r => { const o = {}; cols.forEach(c => { if (c in r) o[c] = r[c]; }); return o; });
+    }
     return json(res, 200, out);
   }
 

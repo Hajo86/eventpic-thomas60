@@ -22,6 +22,7 @@ Ohne App-Installation, ohne Registrierung, ohne Werbung.
 | 🖼 **Live-Galerie** | aktualisiert sich selbst, filterbar nach Kategorie und Gast, Vollbild mit Wischen |
 | 📺 **Slideshow** | Vollbildmodus für TV/Beamer, mischt neue Fotos automatisch ein, „neu"-Badge |
 | 👤 **Meine Fotos** | jeder Gast kann eigene Fotos selbst wieder löschen |
+| 🔄 **Fortschritt folgt dem Server** | löscht der Gastgeber ein Foto, verschwindet das Häkchen beim Gast von allein |
 | 🖨 **Aushang zum Ausdrucken** | fertige A4-Seite oder vier Tischkarten, QR und Kurzanleitung, druckfertig aus dem Browser (`#/print`) |
 | 🔑 **Gastgeber-Bereich** | QR-Code, Live-Zahlen, Selbsttest, ZIP-Download |
 | ☑️ **Moderation mit Mehrfachauswahl** | Fotos ankreuzen → verbergen oder löschen; „alle löschen" mit Tipp-Bestätigung |
@@ -225,6 +226,9 @@ node tests/mock-supabase.mjs 8300 &
 node tests/mock-supabase.mjs 8305 --reject-auth &
 EP_API=http://127.0.0.1:8300 node tests/e2e-online.mjs
 EP_API=http://127.0.0.1:8305 node tests/e2e-online.mjs
+
+# Fortschritt: geloeschte Fotos raeumen die Haken beim Gast weg
+EP_API=http://127.0.0.1:8300 node tests/e2e-progress.mjs
 
 # Navigation aus allen Bereichen + Selbsttest im Gastgeber-Bereich
 EP_API=http://127.0.0.1:8300 node tests/e2e-selftest.mjs

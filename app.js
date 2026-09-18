@@ -198,9 +198,22 @@
     });
   }
   var api = {
+    // owner_token wird bewusst NICHT mitgeladen: er ist der Schlüssel, mit dem
+    // ein Gast sein eigenes Foto löschen darf, und hat in der Galerie aller
+    // Gäste nichts zu suchen.
     list: function (limit) {
-      var q = '/rest/v1/event_photos?select=*&event_id=eq.' + encodeURIComponent(CFG.eventId) +
+      var q = '/rest/v1/event_photos?select=' +
+        'id,event_id,task_id,guest_name,caption,path,width,height,created_at,hidden' +
+        '&event_id=eq.' + encodeURIComponent(CFG.eventId) +
         '&hidden=is.false&order=created_at.desc&limit=' + (limit || 400);
+      return sbFetch(q, { headers: sbHeaders() });
+    },
+    // Die eigenen Fotos — daraus wird der Fortschritt berechnet. Damit stimmt
+    // er auch dann noch, wenn der Gastgeber Fotos gelöscht hat.
+    mine: function () {
+      var q = '/rest/v1/event_photos?select=*&event_id=eq.' + encodeURIComponent(CFG.eventId) +
+        '&owner_token=eq.' + encodeURIComponent(ownerToken) +
+        '&order=created_at.desc&limit=400';
       return sbFetch(q, { headers: sbHeaders() });
     },
     insert: function (row) {
@@ -249,6 +262,7 @@
   /* ======================= 6. Zustand ==================================== */
   var state = {
     photos: [],          // Fotos aus dem Backend (oder lokal im Demo-Modus)
+    minePhotos: [],      // die eigenen Fotos laut Server — Grundlage des Fortschritts
     queue: [],           // wartende Uploads
     mine: lsGet(LS.mine, {}),   // { taskId: anzahl } – für die Fortschrittsanzeige
     urls: {},            // objectURL-Cache für Demo-Fotos
@@ -257,9 +271,24 @@
     admin: false,
   };
   function myCount(taskId) { return state.mine[taskId] || 0; }
+  // Beim Absenden sofort ein Häkchen setzen (das Foto ist ja unterwegs). Beim
+  // nächsten Abgleich ersetzt der Server diesen Stand.
   function markMine(taskId) {
     state.mine[taskId] = (state.mine[taskId] || 0) + 1;
     lsSet(LS.mine, state.mine);
+  }
+  // Aus den eigenen Fotos auf dem Server + noch wartenden Uploads neu aufbauen.
+  function rebuildMine(rows, queued) {
+    var m = {};
+    (rows || []).forEach(function (p) { m[p.task_id] = (m[p.task_id] || 0) + 1; });
+    (queued || []).forEach(function (it) { m[it.task_id] = (m[it.task_id] || 0) + 1; });
+    state.mine = m;
+    lsSet(LS.mine, m);
+  }
+  function isMine(p) {
+    if (p.demo) return true;
+    for (var i = 0; i < state.minePhotos.length; i++) if (state.minePhotos[i].id === p.id) return true;
+    return false;
   }
   function doneCount() { return Object.keys(state.mine).filter(function (k) { return state.mine[k] > 0; }).length; }
   function countFor(taskId) {
@@ -312,9 +341,17 @@
     if (!online()) return loadDemoPhotos().then(renderIfLive);
     if (!force && Date.now() - state.lastFetch < 4000) return Promise.resolve();
     state.lastFetch = Date.now();
-    return api.list().then(function (rows) {
-      state.photos = rows || [];
+    return Promise.all([
+      api.list(),
+      api.mine().catch(function () { return null; }),
+      idbOk ? idb.all('queue').catch(function () { return []; }) : Promise.resolve([]),
+    ]).then(function (r) {
+      state.photos = r[0] || [];
       state.fetchError = '';
+      if (r[1]) {
+        state.minePhotos = r[1];
+        rebuildMine(r[1], (r[2] || []).concat(memQueue));
+      }
       renderIfLive();
     }).catch(function (e) {
       state.fetchError = e.message;
@@ -796,8 +833,9 @@
 
   /* ---- Meine Fotos ---- */
   function viewMe() {
-    // Im Demo-Modus liegen ohnehin nur die eigenen Fotos auf dem Gerät.
-    var mine = state.photos.filter(function (p) { return p.demo || p.owner_token === ownerToken; });
+    // Im Demo-Modus liegen ohnehin nur die eigenen Fotos auf dem Gerät;
+    // online kommt die Liste vom Server (und ist damit immer aktuell).
+    var mine = online() ? state.minePhotos : state.photos.filter(function (p) { return p.demo; });
     var h = statusBanner() +
       '<div class="sec"><h2>Meine Fotos</h2><span class="n">' + mine.length + '</span></div>';
     h += '<div class="card" style="padding:14px;margin:6px 0 12px">' +
@@ -835,8 +873,10 @@
     });
   }
   function deleteOwn(id) {
-    var p = state.photos.filter(function (x) { return x.id === id; })[0];
+    var p = state.photos.filter(function (x) { return x.id === id; })[0] ||
+            state.minePhotos.filter(function (x) { return x.id === id; })[0];
     var after = function () {
+      state.minePhotos = state.minePhotos.filter(function (x) { return x.id !== id; });
       if (p && state.mine[p.task_id]) {
         state.mine[p.task_id]--;
         if (state.mine[p.task_id] <= 0) delete state.mine[p.task_id];
@@ -921,7 +961,7 @@
         (p.caption ? ' · „' + esc(p.caption) + '"' : '') + '</div>' +
         '<div class="row" style="margin-top:10px">' +
         '<button class="btn sm sec2" data-share>Teilen / Speichern</button>' +
-        (p.owner_token === ownerToken || p.demo ? '<button class="btn sm sec2" data-del>Löschen</button>' : '') +
+        (isMine(p) ? '<button class="btn sm sec2" data-del>Löschen</button>' : '') +
         (state.admin ? '<button class="btn sm sec2" data-hide>Verbergen</button>' : '') +
         '</div></div>';
       box.querySelector('.x').onclick = close;
