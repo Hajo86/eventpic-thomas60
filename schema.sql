@@ -81,9 +81,14 @@ on conflict (event_id) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- 4. Funktionen
+--    Jeweils mit "drop function if exists" davor: "create or replace" allein
+--    scheitert, sobald sich der Rückgabetyp einer bereits vorhandenen Funktion
+--    ändert (Postgres: 42P13 "cannot change return type"). Die Rechte werden
+--    unten neu erteilt, das Löschen ist also gefahrlos.
 -- ---------------------------------------------------------------------------
 
 -- 4a. Gast löscht sein eigenes Foto (nur mit passendem owner_token)
+drop function if exists public.ep_delete_own_photo(uuid, text);
 create or replace function public.ep_delete_own_photo(p_id uuid, p_token text)
 returns integer
 language plpgsql
@@ -102,6 +107,7 @@ end;
 $$;
 
 -- 4b. PIN-Prüfung
+drop function if exists eventpic_private.pin_ok(text, text);
 create or replace function eventpic_private.pin_ok(p_pin text, p_event text)
 returns boolean
 language sql
@@ -115,6 +121,7 @@ as $$
 $$;
 
 -- 4c. Admin: alle Fotos inklusive verborgener
+drop function if exists public.ep_admin_list(text, text);
 create or replace function public.ep_admin_list(p_pin text, p_event text)
 returns setof public.event_photos
 language plpgsql
@@ -131,6 +138,7 @@ end;
 $$;
 
 -- 4d. Admin: Foto verbergen / wieder zeigen
+drop function if exists public.ep_admin_set_hidden(text, uuid, boolean);
 create or replace function public.ep_admin_set_hidden(p_pin text, p_id uuid, p_hidden boolean)
 returns void
 language plpgsql
@@ -150,6 +158,7 @@ $$;
 --     ("Direct deletion from storage tables is not allowed"). Die App versucht
 --     anschließend die Storage-API; klappt das nicht, bleibt die Datei bis zum
 --     Aufräumen nach dem Fest liegen (siehe Abschnitt 9).
+drop function if exists public.ep_admin_delete(text, uuid);
 create or replace function public.ep_admin_delete(p_pin text, p_id uuid)
 returns text
 language plpgsql
