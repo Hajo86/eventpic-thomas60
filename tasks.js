@@ -22,6 +22,18 @@ window.EVENT = {
   // Seite gerade lokal oder in einer Vorschau geöffnet hast.
   guestUrl: 'https://hajo86.github.io/eventpic-thomas60/',
 
+  // --- Supabase: gilt für ALLE Gäste -------------------------------------
+  // Diese beiden Werte müssen hier stehen, sonst müsste sie jeder Gast auf
+  // seinem Handy selbst eintragen. Der "Publishable Key" (früher "anon key")
+  // ist genau dafür gedacht, öffentlich zu sein: Er landet ohnehin im Browser
+  // jedes Gasts. Geschützt wird nicht der Schlüssel, sondern die Datenbank —
+  // per Row Level Security darf er nur sichtbare Fotos lesen und neue
+  // einfügen, sonst nichts (siehe schema.sql).
+  // NIEMALS hier eintragen: service_role- oder secret-Schlüssel.
+  supabaseUrl: 'https://futdxrnvbdaofdhyaicy.supabase.co',
+  supabaseKey: '',          // <<< sb_publishable_... hier eintragen
+  supabaseBucket: 'eventpic',
+
   title: 'Thomas wird 60',
   subtitle: 'Mach mit: {n} Fotoaufgaben für den schönsten Tag',  // {n} = Anzahl
   honoree: 'Thomas',

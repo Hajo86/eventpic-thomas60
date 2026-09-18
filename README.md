@@ -98,10 +98,31 @@ nur auf dem Gerät. So kannst du sie in Ruhe ausprobieren.
 
 ### 3 · App verbinden und testen
 
+**Die Zugangsdaten gehören in [`tasks.js`](tasks.js), nicht in den Admin-Bereich.**
+Nur dort gelten sie für *alle* Gäste. Sonst müsste sie jeder auf seinem Handy
+selbst eintragen — genau das soll niemand tun:
+
+```js
+supabaseUrl: 'https://xxxxxxxxxxxx.supabase.co',
+supabaseKey: 'sb_publishable_…',      // bzw. der anon-public-Key
+supabaseBucket: 'eventpic',
+```
+
+Ändern, committen, pushen — fertig. Dass der Schlüssel damit öffentlich im
+Repository steht, ist **so vorgesehen**: Er landet ohnehin im Browser jedes
+Gasts. Geschützt wird nicht der Schlüssel, sondern die Datenbank — per Row
+Level Security darf er nur sichtbare Fotos lesen und neue einfügen (siehe
+[`schema.sql`](schema.sql)). Ein `service_role`- oder `secret`-Schlüssel darf
+dort **niemals** stehen.
+
+Der Admin-Bereich überschreibt die Werte nur **für dein eigenes Gerät** —
+praktisch zum Ausprobieren eines zweiten Projekts. Beide Felder leeren und
+speichern nimmt die Änderung zurück.
+
 1. App öffnen, hinten an die Adresse `#/admin` hängen
    (der Link steht auch unten unter „Meine Fotos" und auf der Info-Seite).
-2. **Project URL** und **Anon-Key** eintragen → **Speichern & prüfen**.
-   Es muss „Verbindung steht ✅" erscheinen.
+2. Status prüfen: Es muss „Verbindung steht ✅" und „Quelle: `tasks.js` —
+   gilt für alle Gäste" dastehen.
 3. **Echter Durchlauf** — das ist der eigentliche Test:
    - Eine Aufgabe öffnen, Foto machen, absenden.
    - Tab **Galerie**: Das Foto muss da sein.
@@ -198,6 +219,9 @@ node tests/mock-supabase.mjs 8300 &
 node tests/mock-supabase.mjs 8305 --reject-auth &
 EP_API=http://127.0.0.1:8300 node tests/e2e-online.mjs
 EP_API=http://127.0.0.1:8305 node tests/e2e-online.mjs
+
+# Gast muss nichts einrichten (Zugangsdaten kommen aus tasks.js)
+EP_API=http://127.0.0.1:8300 node tests/e2e-defaults.mjs
 
 # Zwei Regressionstests fuer echte Geraetefehler:
 #  - IndexedDB komplett gesperrt (privater Modus)

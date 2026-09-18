@@ -138,7 +138,16 @@
   };
 
   /* ======================= 5. Supabase (REST) ============================ */
-  var SB = lsGet(LS.sb, { url: '', key: '', bucket: 'eventpic' });
+  // Voreinstellung aus tasks.js — damit Gäste nichts einrichten müssen.
+  // Der Gastgeber kann sie im Admin-Bereich für sein Gerät überschreiben.
+  function defaultSB() {
+    return {
+      url: (CFG.supabaseUrl || '').replace(/\/+$/, ''),
+      key: CFG.supabaseKey || '',
+      bucket: CFG.supabaseBucket || 'eventpic',
+    };
+  }
+  var SB = lsGet(LS.sb, null) || defaultSB();
   function online() { return !!(SB.url && SB.key); }
   function sbUrl(p) { return String(SB.url).replace(/\/+$/, '') + p; }
   // Manche Schlüsselarten (neue "Publishable Keys") werden nur im apikey-Header
@@ -427,8 +436,9 @@
   function statusBanner() {
     var h = '';
     if (!online()) {
-      h += '<div class="banner">Demo-Modus: Es sind keine Zugangsdaten hinterlegt. ' +
-        'Fotos bleiben nur auf diesem Gerät. <a href="#/admin">Einrichten</a></div>';
+      h += '<div class="banner">Die Fotos bleiben gerade nur auf diesem Gerät — die App ist ' +
+        'noch nicht mit der gemeinsamen Galerie verbunden. ' +
+        '<a href="#/admin">Für den Gastgeber: einrichten</a></div>';
     } else if (state.fetchError) {
       h += '<div class="banner">Die Galerie konnte nicht geladen werden. Wir versuchen es weiter.</div>';
     }
@@ -979,8 +989,8 @@
   function viewAdmin() {
     var h = '<button class="btn ghost" id="back" style="margin:10px 0">‹ Zurück zur App</button>' +
       '<h2>Gastgeber-Bereich</h2>' +
-      '<p class="hint">Nur für dich. Alles hier bleibt in diesem Browser gespeichert – ' +
-      'es landet nichts im Repository.</p>';
+      '<p class="hint">Nur für dich. Änderungen hier gelten für dieses Gerät. ' +
+      'Was alle Gäste betrifft, steht in <code>tasks.js</code>.</p>';
 
     /* Verbindung */
     h += '<div class="card" style="padding:16px;margin:14px 0">' +
@@ -993,6 +1003,8 @@
       '<input id="sbb" type="text" value="' + esc(SB.bucket || 'eventpic') + '">' +
       '<div class="row" style="margin-top:14px"><button class="btn" id="save">Speichern &amp; prüfen</button></div>' +
       '<div class="hint">Status: ' + (online() ? '✅ verbunden mit ' + esc(SB.url) : '⚠️ Demo-Modus (nur lokal)') +
+      (lsGet(LS.sb, null) ? '<br>Quelle: Eingabe auf diesem Gerät (beide Felder leeren = wieder die Werte aus tasks.js)'
+                          : '<br>Quelle: <code>tasks.js</code> — gilt für alle Gäste') +
       '<br>Zwischenspeicher (Offline-Warteschlange): ' + (idbOk ? '✅ nutzbar' : '⚠️ nicht nutzbar — Fotos gehen nur direkt raus') +
       (state.fetchError ? '<br>Letzter Fehler: ' + esc(state.fetchError) : '') + '</div>' +
       '<div class="banner" style="margin-top:12px">Bitte ein <b>eigenes</b> Supabase-Projekt nur für dieses Fest ' +
@@ -1077,8 +1089,15 @@
     $('#back').onclick = function () { go('#/tasks'); };
 
     $('#save').onclick = function () {
-      SB = { url: ($('#sbu').value || '').trim().replace(/\/+$/, ''), key: ($('#sbk').value || '').trim(), bucket: ($('#sbb').value || 'eventpic').trim() };
-      lsSet(LS.sb, SB);
+      var u = ($('#sbu').value || '').trim().replace(/\/+$/, '');
+      var k = ($('#sbk').value || '').trim();
+      if (!u && !k) {                     // beide leer -> Voreinstellung der App
+        localStorage.removeItem(LS.sb);
+        SB = defaultSB();
+      } else {
+        SB = { url: u, key: k, bucket: ($('#sbb').value || 'eventpic').trim() };
+        lsSet(LS.sb, SB);
+      }
       state.fetchError = '';
       if (!online()) { toast('Zugangsdaten gelöscht – Demo-Modus.'); render(); return; }
       api.list(1).then(function () {
