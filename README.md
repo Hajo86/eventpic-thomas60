@@ -45,15 +45,45 @@ nur auf dem Gerät. So kannst du sie in Ruhe ausprobieren.
 > `file://` funktioniert nicht.
 
 ### 2 · Supabase-Projekt anlegen
-1. Auf [supabase.com](https://supabase.com) kostenloses Projekt erstellen —
-   **Region: EU (Frankfurt)**.
-2. Im **SQL Editor** den kompletten Inhalt von [`schema.sql`](schema.sql) einfügen und ausführen.
-   Dabei in Abschnitt 3 die Zeile
+
+1. [supabase.com](https://supabase.com) → **New project**
+   - Name: frei (z.B. `thomas60`)
+   - **Region: `Central EU (Frankfurt)`** — die Fotos bleiben damit in der EU
+   - Datenbank-Passwort setzen und irgendwo sicher notieren (brauchst du hier nicht,
+     aber ohne kommst du später nicht mehr an die Datenbank)
+   - Plan: **Free**
+   - Anlegen dauert ein bis zwei Minuten.
+
+2. Linke Seitenleiste → **SQL Editor** → **New query**.
+   Den **kompletten** Inhalt von [`schema.sql`](schema.sql) hineinkopieren.
+
+3. **Eine einzige Zeile ändern** — such nach `BITTE-AENDERN`:
    ```sql
    values ('thomas60-2026', 'BITTE-AENDERN-0000')
    ```
-   auf eine eigene **Admin-PIN** ändern.
-3. Unter **Project Settings → API** notieren: **Project URL** und **anon public key**.
+   Ersetze `BITTE-AENDERN-0000` durch deine **Admin-PIN** (frei wählbar, z.B. sechs
+   Ziffern). Die brauchst du später für die Moderation. Nimm keine PIN, die du
+   woanders benutzt — und schreib sie **nicht** ins Repository zurück.
+
+4. **Run** drücken. Am Ende gibt das Skript einen Selbsttest aus. Er muss so aussehen:
+
+   | status | pruefung |
+   |---|---|
+   | ✅ ok | 1. Tabelle public.event_photos |
+   | ✅ ok | 2. Row Level Security aktiv |
+   | ✅ ok | 3. Policies für anon (lesen + einfügen) |
+   | ✅ ok | 4. Die vier ep_-Funktionen |
+   | ✅ ok | 5. Öffentlicher Storage-Bucket „eventpic" |
+   | ✅ ok | 6. Admin-PIN geändert |
+
+   Steht irgendwo ❌, ist dieser Teil nicht durchgelaufen — Fehlermeldung oberhalb lesen,
+   korrigieren, das Skript einfach noch einmal komplett ausführen. Es ist **wiederholbar**
+   (`if not exists` / `create or replace`), zerstört also nichts.
+
+5. **Project Settings → API** (Zahnrad unten links) → notieren:
+   - **Project URL** — sieht aus wie `https://abcdefghijkl.supabase.co`
+   - **anon public** — der lange Schlüssel, der mit `eyJ…` anfängt
+     (**nicht** `service_role` — der darf nie in die App)
 
 > **Du hast schon ein Supabase-Projekt (RSS-Akquise)?** Technisch passt das Schema daneben:
 > alle Objekte heißen `event_photos`, `ep_*`, `eventpic_private` und Bucket `eventpic` — es
@@ -65,10 +95,34 @@ nur auf dem Gerät. So kannst du sie in Ruhe ausprobieren.
 > lesbar *und* schreibbar — jeder Gast mit dem QR-Code hätte damit Zugriff auf den
 > kompletten Lead-Pool. Ein getrenntes Projekt löst das sauber und kostet nichts.
 
-### 3 · App verbinden
-`#/admin` aufrufen (Link steht unten in „Meine Fotos" und in der Info-Seite),
-Projekt-URL + Anon-Key eintragen → **Speichern & prüfen**. Es muss „Verbindung steht ✅"
-erscheinen. Die Daten bleiben **nur in diesem Browser** — im Repository liegen keine Schlüssel.
+### 3 · App verbinden und testen
+
+1. App öffnen, hinten an die Adresse `#/admin` hängen
+   (der Link steht auch unten unter „Meine Fotos" und auf der Info-Seite).
+2. **Project URL** und **Anon-Key** eintragen → **Speichern & prüfen**.
+   Es muss „Verbindung steht ✅" erscheinen.
+3. **Echter Durchlauf** — das ist der eigentliche Test:
+   - Eine Aufgabe öffnen, Foto machen, absenden.
+   - Tab **Galerie**: Das Foto muss da sein.
+   - **Zweites Gerät** (oder privates Fenster) mit derselben Adresse öffnen: Das Foto muss
+     auch dort erscheinen. Erst dann läuft die Cloud wirklich.
+   - Admin → **PIN eintragen → „Alle Fotos laden"**: Liste muss kommen, „Verbergen"
+     muss das Foto aus der Galerie nehmen.
+   - Admin → **„Alle Fotos als ZIP herunterladen"**: Datei muss sich öffnen lassen.
+4. Vor dem Fest die Testfotos wegräumen: Admin → PIN → „Alle Fotos laden" → jedes Foto
+   **Löschen**.
+
+#### Wenn etwas nicht geht
+
+| Meldung / Symptom | Ursache | Lösung |
+|---|---|---|
+| `401` oder „Invalid API key" | falscher oder abgeschnittener Key | Anon-Key neu kopieren, keine Leerzeichen, kein Zeilenumbruch |
+| `404` / „relation … does not exist" | `schema.sql` nicht (vollständig) gelaufen | SQL Editor, Skript komplett erneut ausführen, Selbsttest prüfen |
+| „Could not find the function" | REST-API kennt die neuen Funktionen noch nicht | `notify pgrst, 'reload schema';` im SQL Editor ausführen, 30 s warten |
+| `42501` / „row-level security policy" | Policies fehlen | Selbsttest Zeile 3 prüfen, Skript erneut ausführen |
+| „Bucket not found" beim Upload | Bucket fehlt oder heißt anders | Storage → Bucket `eventpic` muss existieren und **public** sein; im Admin-Feld „Storage-Bucket" muss derselbe Name stehen |
+| „PIN falsch" trotz richtiger PIN | PIN im Skript nicht geändert oder anderes Event | Selbsttest Zeile 6 prüfen |
+| Foto bleibt in „wartet auf Versand" | kein Netz oder Upload scheitert | Seite offen lassen, Queue läuft automatisch weiter; Fehler steht im Admin-Status |
 
 ### 4 · QR-Code holen
 Im Admin-Bereich unter „2 · QR-Code für die Gäste": **QR als Bild speichern**.

@@ -8,6 +8,9 @@
 --  Tabelle "leads" und dem Bucket "lead-photos") laufen kann, ohne etwas
 --  anzufassen. Es wird nichts gelöscht und keine fremde Policy verändert.
 --
+--  ‼️  DU MUSST GENAU EINE ZEILE ÄNDERN: suche unten nach BITTE-AENDERN
+--      und trage dort deine Admin-PIN ein. Sonst alles einfach ausführen.
+--
 --  ACHTUNG, bevor du dieses Schema in ein BESTEHENDES Projekt legst:
 --  Der Anon-Key steckt bei jedem Partygast im Browser. Er gilt für das ganze
 --  Projekt. Wenn in derselben Datenbank Tabellen mit offenen Policies liegen
@@ -184,7 +187,41 @@ create policy "eventpic hochladen"
   with check (bucket_id = 'eventpic');
 
 -- ---------------------------------------------------------------------------
--- 6. Nach dem Fest: aufräumen (bewusst manuell)
+-- 6. PostgREST-Schemacache neu laden
+--    Ohne das kennt die REST-API die neuen Funktionen evtl. erst nach ein paar
+--    Minuten und antwortet vorher mit "Could not find the function".
+-- ---------------------------------------------------------------------------
+notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------------------------
+-- 7. Selbsttest — muss sechsmal ✅ ergeben
+--    (Diesen Block darfst du jederzeit erneut allein ausführen.)
+-- ---------------------------------------------------------------------------
+with checks(pruefung, ok) as (
+  values
+    ('1. Tabelle public.event_photos',
+      (select count(*) = 1 from information_schema.tables
+        where table_schema = 'public' and table_name = 'event_photos')),
+    ('2. Row Level Security aktiv',
+      (select relrowsecurity from pg_class where oid = 'public.event_photos'::regclass)),
+    ('3. Policies für anon (lesen + einfügen)',
+      (select count(*) >= 2 from pg_policies
+        where schemaname = 'public' and tablename = 'event_photos')),
+    ('4. Die vier ep_-Funktionen',
+      (select count(*) = 4 from information_schema.routines
+        where routine_schema = 'public' and routine_name like 'ep!_%' escape '!')),
+    ('5. Öffentlicher Storage-Bucket "eventpic"',
+      (select count(*) = 1 from storage.buckets where id = 'eventpic' and public)),
+    ('6. Admin-PIN geändert',
+      (select count(*) = 1 from eventpic_private.admin
+        where event_id = 'thomas60-2026' and pin <> 'BITTE-AENDERN-0000'))
+)
+select case when ok then '✅ ok' else '❌ FEHLT' end as status, pruefung
+from checks
+order by ok, pruefung;
+
+-- ---------------------------------------------------------------------------
+-- 8. Nach dem Fest: aufräumen (bewusst manuell)
 -- ---------------------------------------------------------------------------
 -- Erst die Fotos herunterladen (Admin-Bereich → "Alle Fotos als ZIP"), dann:
 --
