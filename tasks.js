@@ -21,7 +21,7 @@ window.EVENT = {
   // einer Vorschau oder lokal läuft — auf der echten Seite nimmt die App ihre
   // eigene Adresse. Nach einem Umbenennen des Repositorys stimmt der QR also
   // von allein.
-  guestUrl: 'https://hajo86.github.io/thomas-jubelt/',
+  guestUrl: 'https://hajo86.github.io/eventpic-thomas60/',
 
   // --- Supabase: gilt für ALLE Gäste -------------------------------------
   // Diese beiden Werte müssen hier stehen, sonst müsste sie jeder Gast auf
