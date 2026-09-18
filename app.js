@@ -48,7 +48,7 @@
   /* ======================= 2. Konfiguration ============================== */
   var LS = {
     guest: 'ep.guest', token: 'ep.token', consent: 'ep.consent',
-    sb: 'ep.sb', pin: 'ep.pin', cfg: 'ep.cfg', mine: 'ep.mine',
+    sb: 'ep.sb', pin: 'ep.pin', cfg: 'ep.cfg', mine: 'ep.mine', url: 'ep.url',
   };
   function lsGet(k, fb) {
     try { var v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); }
@@ -830,11 +830,31 @@
     if (slide.lock) { try { slide.lock.release(); } catch (e) {} slide.lock = null; }
   }
 
-  /* ---- Druckansicht: Aushang + Tischkarten ---- */
-  var printCfg = { mode: 'poster', url: '' };
-  function guestUrl() {
-    return printCfg.url || location.href.split('#')[0];
+  /* ---- Gäste-Adresse (steckt im QR-Code) ---- */
+  function ownUrl() { return location.href.split('#')[0]; }
+  function guestUrl() { return lsGet(LS.url, '') || ownUrl(); }
+  function setGuestUrl(u) {
+    u = (u || '').trim();
+    if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u;
+    lsSet(LS.url, u);
   }
+  // Vorschau-Umgebungen (Artifact-Sandbox, iframe, localhost) liefern eine
+  // Adresse, die für Gäste nicht erreichbar ist.
+  function isPreviewHost() {
+    try { if (window.top !== window.self) return true; } catch (e) { return true; }
+    var h = location.hostname;
+    return /claudeusercontent|claude\.ai|localhost|^127\.|^192\.168\.|\.local$/i.test(h);
+  }
+  function urlWarning() {
+    if (lsGet(LS.url, '')) return '';
+    if (!isPreviewHost()) return '';
+    return '<div class="banner">Diese Seite läuft gerade in einer <b>Vorschau</b>. Die Adresse unten ' +
+      'ist nur intern erreichbar — ein QR-Code damit funktioniert bei deinen Gästen <b>nicht</b>. ' +
+      'Trag die endgültige Adresse ein, sobald die App online ist.</div>';
+  }
+
+  /* ---- Druckansicht: Aushang + Tischkarten ---- */
+  var printCfg = { mode: 'poster' };
   function sheetHtml(compact) {
     var u = guestUrl().replace(/^https?:\/\//, '');
     return '<div class="sheet' + (compact ? '' : ' poster') + '">' +
@@ -858,8 +878,9 @@
     var h = '<div class="no-print">' +
       '<button class="btn ghost" id="back" style="margin:10px 0">‹ Zurück zur App</button>' +
       '<h2>Aushang drucken</h2>' +
-      '<p class="hint">Der QR-Code wird aus der Adresse unten erzeugt. Solange die App noch ' +
+      '<p class="hint">Der QR-Code wird aus dieser Adresse erzeugt. Solange die App noch ' +
       'nicht endgültig online ist, trag hier die spätere Adresse ein — dann stimmt der Ausdruck.</p>' +
+      urlWarning() +
       '<div class="psetup">' +
       '<div class="f2"><label class="f" for="purl">Adresse für die Gäste</label>' +
       '<input id="purl" type="text" value="' + esc(guestUrl()) + '"></div></div>' +
@@ -883,7 +904,7 @@
     });
     $('#back').onclick = function () { go('#/admin'); };
     $('#doprint').onclick = function () { window.print(); };
-    $('#purl').onchange = function () { printCfg.url = this.value.trim(); render(); };
+    $('#purl').onchange = function () { setGuestUrl(this.value); render(); };
     Array.prototype.forEach.call(view.querySelectorAll('#pf button'), function (b) {
       b.onclick = function () { printCfg.mode = b.dataset.m; render(); };
     });
@@ -915,11 +936,14 @@
       '</div>';
 
     /* QR */
-    var link = location.href.split('#')[0];
+    var link = guestUrl();
     h += '<div class="card" style="padding:16px;margin:14px 0">' +
       '<h3>2 · QR-Code für die Gäste</h3>' +
+      urlWarning() +
+      '<label class="f" for="gurl">Adresse, die im QR-Code steckt</label>' +
+      '<input id="gurl" type="text" value="' + esc(link) + '" placeholder="https://…">' +
+      '<div class="hint">Leeren und speichern = wieder die Adresse dieser Seite verwenden.</div>' +
       '<div class="qr" style="margin:12px 0"><canvas id="qrc"></canvas></div>' +
-      '<div class="hint" style="word-break:break-all">' + esc(link) + '</div>' +
       '<div class="row" style="margin-top:12px">' +
       '<button class="btn sec2 sm" id="qrdl">QR als Bild speichern</button>' +
       '<button class="btn sec2 sm" id="cplink">Link kopieren</button>' +
@@ -1011,6 +1035,7 @@
       else toast(link, 6000);
     };
 
+    $('#gurl').onchange = function () { setGuestUrl(this.value); render(); };
     $('#goprint').onclick = function () { go('#/print'); };
     $('#slide').onclick = function () { go('#/slideshow'); };
     $('#reload').onclick = function () { refresh(true).then(function () { toast('Aktualisiert.'); }); };
