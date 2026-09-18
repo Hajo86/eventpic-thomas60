@@ -177,9 +177,11 @@
   function netError(e) {
     var m = (e && e.message) || String(e);
     if (/failed to fetch|networkerror|load failed|network request failed/i.test(m)) {
-      return new Error('Keine Verbindung zum Server. Mögliche Gründe: die Adresse stimmt nicht, ' +
-        'das Gerät ist offline — oder diese Seite läuft in einer Vorschau, die keine externen ' +
-        'Verbindungen zulässt. Auf der endgültigen Adresse funktioniert es.');
+      return new Error('Keine Verbindung zu ' + (SB.url || '(keine Adresse)') + '. ' +
+        (isPreviewHost()
+          ? 'Diese Seite läuft gerade in einer Vorschau — dort sind externe Verbindungen gesperrt. ' +
+            'Öffne die richtige Adresse: ' + guestUrl()
+          : 'Prüfe Adresse und Schlüssel, oder das Gerät ist offline.'));
     }
     return e;
   }
@@ -1051,6 +1053,12 @@
   function viewAdmin() {
     var h = '<button class="btn sec2 sm" id="back" style="margin:12px 0">‹ Zurück zu den Aufgaben</button>' +
       '<h2>Gastgeber-Bereich</h2>' +
+      (isPreviewHost()
+        ? '<div class="banner">Diese Seite läuft auf <code>' + esc(location.host) + '</code> — das ist eine ' +
+          '<b>Vorschau</b>. Verbindungen zu Supabase sind hier gesperrt, Moderation und Selbsttest ' +
+          'schlagen deshalb fehl. Für den echten Betrieb: <a href="' + esc(guestUrl()) + '">' +
+          esc(guestUrl().replace(/^https?:\/\//, '')) + '</a></div>'
+        : '') +
       '<p class="hint">Nur für dich. Änderungen hier gelten für dieses Gerät. ' +
       'Was alle Gäste betrifft, steht in <code>tasks.js</code>.</p>';
 
@@ -1070,6 +1078,7 @@
       '<div class="hint">Status: ' + (online() ? '✅ verbunden mit ' + esc(SB.url) : '⚠️ Demo-Modus (nur lokal)') +
       (lsGet(LS.sb, null) ? '<br>Quelle: Eingabe auf diesem Gerät (beide Felder leeren = wieder die Werte aus tasks.js)'
                           : '<br>Quelle: <code>tasks.js</code> — gilt für alle Gäste') +
+      '<br>Diese Seite läuft auf: <code>' + esc(location.host) + '</code>' +
       '<br>Zwischenspeicher (Offline-Warteschlange): ' + (idbOk ? '✅ nutzbar' : '⚠️ nicht nutzbar — Fotos gehen nur direkt raus') +
       (state.fetchError ? '<br>Letzter Fehler: ' + esc(state.fetchError) : '') + '</div>' +
       '<div class="banner" style="margin-top:12px">Bitte ein <b>eigenes</b> Supabase-Projekt nur für dieses Fest ' +
