@@ -51,8 +51,10 @@ window.EVENT = {
   ],
   slideshowSeconds: 6,      // Bildwechsel in der Slideshow
   showLeaderboard: false,   // Spaß-Rangliste (siehe Lastenheft F-35)
-  maxEdge: 1600,            // längste Bildkante nach Komprimierung (px)
+  maxEdge: 1600,            // längste Bildkante des gespeicherten Fotos (px)
   jpegQuality: 0.82,
+  thumbEdge: 420,           // Vorschaubild für die Galerie — spart Datenvolumen
+  thumbQuality: 0.68,
 };
 
 /* Kategorien: id, Label, Emoji.

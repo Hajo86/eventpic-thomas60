@@ -40,13 +40,16 @@ ok(true, 'Foto liegt in der Galerie');
 await p.goto(BASE + '#/admin');
 await p.fill('#pin', 'Hajo86');
 await p.click('#mod');
-await p.waitForSelector('#modlist .it', { timeout: 10000 });
+await p.waitForSelector('#modlist [data-sel]', { timeout: 10000 });
+// Seit der Mehrfachauswahl laeuft Loeschen ueber Kaestchen + "Auswahl loeschen"
+await p.locator('[data-sel]').first().check();
+await p.waitForTimeout(300);
 p.once('dialog', d => d.accept());
 await p.evaluate(() => document.querySelectorAll('.toast').forEach(el => el.remove()));
-await p.click('[data-x]');
+await p.click('#mDel');
 await p.waitForSelector('.toast', { timeout: 10000 });
 const t = await p.locator('.toast').textContent();
-ok(/Gelöscht/.test(t), 'Erfolgsmeldung: ' + t.slice(0, 60));
+ok(/gelöscht/i.test(t), 'Erfolgsmeldung: ' + t.slice(0, 60));
 ok(!/42501|storage tables/i.test(t), 'Keine Storage-Fehlermeldung mehr');
 
 await p.waitForTimeout(1200);

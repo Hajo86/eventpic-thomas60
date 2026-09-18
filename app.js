@@ -168,6 +168,10 @@
     delete opts.headers.Authorization;
     return true;
   }
+  // Vorschaubild liegt neben dem Original: "..._t.jpg". Bewusst per Konvention,
+  // damit dafür keine Spalte in der Datenbank nötig ist.
+  function thumbPath(path) { return String(path).replace(/\.jpg$/i, '_t.jpg'); }
+
   function publicUrl(path) {
     return sbUrl('/storage/v1/object/public/' + encodeURIComponent(SB.bucket || 'eventpic') + '/' +
       path.split('/').map(encodeURIComponent).join('/'));
@@ -211,7 +215,7 @@
         path.split('/').map(encodeURIComponent).join('/'));
       var opts = {
         method: 'POST',
-        headers: sbHeaders({ 'Content-Type': 'image/jpeg', 'x-upsert': 'true', 'cache-control': '3600' }),
+        headers: sbHeaders({ 'Content-Type': 'image/jpeg', 'x-upsert': 'true', 'cache-control': '604800' }),
         body: blob,
       };
       function send() {
@@ -263,12 +267,22 @@
     for (var i = 0; i < state.photos.length; i++) if (state.photos[i].task_id === taskId) n++;
     return n;
   }
-  function photoUrl(p) {
+  function photoUrl(p, thumb) {
     if (p.demo) {
       if (state.urls[p.id]) return state.urls[p.id];
       return '';
     }
-    return publicUrl(p.path);
+    return publicUrl(thumb ? thumbPath(p.path) : p.path);
+  }
+  // Ältere Fotos haben kein Vorschaubild — dann das Original nachladen.
+  function bindImgFallback(root) {
+    Array.prototype.forEach.call((root || view).querySelectorAll('img[data-full]'), function (im) {
+      im.onerror = function () {
+        if (im.dataset.tried) return;
+        im.dataset.tried = '1';
+        im.src = im.dataset.full;
+      };
+    });
   }
 
   /* ======================= 7. Fotos laden ================================ */
@@ -326,6 +340,23 @@
     }
   }
   // Zeichnet neu auf ein Canvas → EXIF (inkl. GPS) ist danach zwangsläufig weg.
+  function drawScaled(img, max, quality) {
+    var w = img.width, h = img.height;
+    var scale = Math.min(1, max / Math.max(w, h));
+    var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+    var c = document.createElement('canvas');
+    c.width = cw; c.height = ch;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch);
+    ctx.drawImage(img, 0, 0, cw, ch);
+    return new Promise(function (res, rej) {
+      c.toBlob(function (b) {
+        if (!b) return rej(new Error('Foto konnte nicht verarbeitet werden.'));
+        res({ blob: b, width: cw, height: ch });
+      }, 'image/jpeg', quality);
+    });
+  }
+
   function compress(file) {
     if (!/^image\//.test(file.type || '')) {
       return Promise.reject(new Error('Das ist kein Bild. Bitte ein Foto auswählen.'));
@@ -334,20 +365,15 @@
       return Promise.reject(new Error('Das Bild ist zu groß (über 40 MB).'));
     }
     return loadImage(file).then(function (img) {
-      var w = img.width, h = img.height, max = CFG.maxEdge || 1600;
-      var scale = Math.min(1, max / Math.max(w, h));
-      var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
-      var c = document.createElement('canvas');
-      c.width = cw; c.height = ch;
-      var ctx = c.getContext('2d');
-      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch);
-      ctx.drawImage(img, 0, 0, cw, ch);
-      if (img.close) img.close();
-      return new Promise(function (res, rej) {
-        c.toBlob(function (b) {
-          if (!b) return rej(new Error('Foto konnte nicht verarbeitet werden.'));
-          res({ blob: b, width: cw, height: ch });
-        }, 'image/jpeg', CFG.jpegQuality || 0.82);
+      // Zwei Größen: das Original für Vollbild und Download, ein kleines
+      // Vorschaubild für die Galerie. Das spart beim Fest ein Vielfaches an
+      // Datenvolumen — 40 Gäste, die durch 300 Fotos scrollen, laden sonst
+      // jedes Bild in voller Größe.
+      return drawScaled(img, CFG.maxEdge || 1600, CFG.jpegQuality || 0.82).then(function (full) {
+        return drawScaled(img, CFG.thumbEdge || 420, CFG.thumbQuality || 0.68).then(function (thumb) {
+          if (img.close) img.close();
+          return { blob: full.blob, width: full.width, height: full.height, thumb: thumb.blob };
+        });
       });
     });
   }
@@ -402,7 +428,10 @@
       return items.reduce(function (p, it) {
         return p.then(function () {
           var path = CFG.eventId + '/' + it.task_id + '/' + it.id + '.jpg';
-          return api.upload(path, it.blob).then(function () {
+          // Vorschaubild zuerst, aber nicht kritisch: scheitert es, zeigt die
+          // Galerie später das Original.
+          return (it.thumb ? api.upload(thumbPath(path), it.thumb).catch(function () {}) : Promise.resolve())
+            .then(function () { return api.upload(path, it.blob); }).then(function () {
             return api.insert({
               id: it.id, event_id: CFG.eventId, task_id: it.task_id,
               guest_name: it.guest_name || null, caption: it.caption || null,
@@ -672,7 +701,8 @@
         var btn = this;
         btn.disabled = true; btn.innerHTML = '<span class="sp"></span> Wird gesendet';
         var item = {
-          id: uid(), task_id: id, blob: pending.blob, width: pending.width, height: pending.height,
+          id: uid(), task_id: id, blob: pending.blob, thumb: pending.thumb,
+          width: pending.width, height: pending.height,
           guest_name: guest || null, caption: ($('#cap').value || '').trim().slice(0, 140) || null,
           owner_token: ownerToken, created_at: new Date().toISOString(), tries: 0,
         };
@@ -698,7 +728,8 @@
           toast('Foto wird vorbereitet …', 1500);
           compress(f).then(function (r) {
             clearPending();
-            pending = { blob: r.blob, width: r.width, height: r.height, url: URL.createObjectURL(r.blob) };
+            pending = { blob: r.blob, thumb: r.thumb, width: r.width, height: r.height,
+              url: URL.createObjectURL(r.blob) };
             render();
           }).catch(function (e) { toast(e.message, 4200); });
         };
@@ -782,7 +813,8 @@
     } else {
       h += '<div class="list">' + mine.map(function (p) {
         var t = task(p.task_id);
-        return '<div class="it"><img loading="lazy" src="' + esc(photoUrl(p)) + '" alt="">' +
+        return '<div class="it"><img loading="lazy" src="' + esc(photoUrl(p, true)) + '"' +
+          ' data-full="' + esc(photoUrl(p)) + '" alt="">' +
           '<div class="g"><div class="t">' + esc(t ? t.text : p.task_id) + '</div>' +
           '<div class="m">' + clockTime(p.created_at) + (p.caption ? ' · ' + esc(p.caption) : '') + '</div></div>' +
           '<button class="btn sm sec2" data-del="' + esc(p.id) + '">Löschen</button></div>';
@@ -862,13 +894,15 @@
   function figureFor(p, i) {
     var t = task(p.task_id);
     return '<figure data-i="' + i + '">' +
-      '<img loading="lazy" decoding="async" src="' + esc(photoUrl(p)) + '" alt="' + esc(t ? t.text : '') + '">' +
+      '<img loading="lazy" decoding="async" src="' + esc(photoUrl(p, true)) + '"' +
+      ' data-full="' + esc(photoUrl(p)) + '" alt="' + esc(t ? t.text : '') + '">' +
       '<figcaption class="who">' + esc(p.guest_name || 'Anonym') + '</figcaption></figure>';
   }
   function bindFigures(arr) {
     Array.prototype.forEach.call(view.querySelectorAll('figure[data-i]'), function (f) {
       f.onclick = function () { lightbox(arr, +f.dataset.i); };
     });
+    bindImgFallback(view);
   }
   function lightbox(arr, idx) {
     var box = document.createElement('div');
@@ -1393,34 +1427,113 @@
     });
   }
 
+  var modSel = {};              // { id: true } — Auswahl in der Moderation
+  function modSelIds() { return Object.keys(modSel).filter(function (k) { return modSel[k]; }); }
+
   function renderModList() {
     var box = $('#modlist'); if (!box) return;
     if (!adminRows || !adminRows.length) { box.innerHTML = '<div class="hint">Keine Fotos.</div>'; return; }
-    box.innerHTML = '<div class="list">' + adminRows.map(function (p) {
-      var t = task(p.task_id);
-      return '<div class="it"><img loading="lazy" src="' + esc(publicUrl(p.path)) + '" alt="">' +
-        '<div class="g"><div class="t">' + esc(t ? t.text.slice(0, 44) : p.task_id) + '</div>' +
-        '<div class="m">' + esc(p.guest_name || 'Anonym') + ' · ' + clockTime(p.created_at) +
-        (p.hidden ? ' · <b>verborgen</b>' : '') + '</div></div>' +
-        '<button class="btn sm sec2" data-h="' + esc(p.id) + '" data-v="' + (p.hidden ? '0' : '1') + '">' +
-        (p.hidden ? 'Zeigen' : 'Verbergen') + '</button>' +
-        '<button class="btn sm sec2" data-x="' + esc(p.id) + '">Löschen</button></div>';
-    }).join('') + '</div>';
+    var n = modSelIds().length;
+    box.innerHTML =
+      '<div class="row" style="margin:12px 0 4px">' +
+      '<button class="btn sm sec2" id="mAll">Alle auswählen</button>' +
+      '<button class="btn sm sec2" id="mNone">Auswahl aufheben</button></div>' +
+      '<div class="row" style="margin:0 0 10px">' +
+      '<button class="btn sm sec2" id="mHide"' + (n ? '' : ' disabled') + '>' +
+        (n ? n + ' verbergen' : 'Auswahl verbergen') + '</button>' +
+      '<button class="btn sm" id="mDel"' + (n ? '' : ' disabled') + '>' +
+        (n ? n + ' löschen' : 'Auswahl löschen') + '</button></div>' +
+      '<div class="hint" id="mProg">' + adminRows.length + ' Fotos · ' + n + ' ausgewählt. ' +
+      '„Verbergen" nimmt ein Foto nur aus Galerie und Slideshow und ist umkehrbar — ' +
+      '„Löschen" ist endgültig.</div>' +
+      '<div class="list">' + adminRows.map(function (p) {
+        var t = task(p.task_id);
+        return '<div class="it">' +
+          '<label class="mchk"><input type="checkbox" data-sel="' + esc(p.id) + '"' +
+          (modSel[p.id] ? ' checked' : '') + '></label>' +
+          '<img loading="lazy" src="' + esc(photoUrl(p, true)) + '"' +
+          ' data-full="' + esc(photoUrl(p)) + '" alt="">' +
+          '<div class="g"><div class="t">' + esc(t ? t.text.slice(0, 40) : p.task_id) + '</div>' +
+          '<div class="m">' + esc(p.guest_name || 'Anonym') + ' · ' + clockTime(p.created_at) +
+          (p.hidden ? ' · <b>verborgen</b>' : '') + '</div></div>' +
+          '<button class="btn sm sec2" data-h="' + esc(p.id) + '" data-v="' + (p.hidden ? '0' : '1') + '">' +
+          (p.hidden ? 'Zeigen' : 'Verbergen') + '</button></div>';
+      }).join('') + '</div>' +
+      '<div class="row" style="margin:14px 0 0">' +
+      '<button class="btn sec2" id="mAllDel" style="color:var(--warn);border-color:var(--warn)">' +
+      'Alle ' + adminRows.length + ' Fotos löschen …</button></div>';
+
+    bindImgFallback(box);
+    Array.prototype.forEach.call(box.querySelectorAll('[data-sel]'), function (c) {
+      c.onchange = function () { modSel[c.dataset.sel] = c.checked; renderModList(); };
+    });
+    $('#mAll').onclick = function () {
+      adminRows.forEach(function (r) { modSel[r.id] = true; }); renderModList();
+    };
+    $('#mNone').onclick = function () { modSel = {}; renderModList(); };
+    $('#mHide').onclick = function () { bulkHide(modSelIds()); };
+    $('#mDel').onclick = function () {
+      var ids = modSelIds();
+      if (!confirm(ids.length + ' Foto(s) endgültig löschen? Das lässt sich nicht rückgängig machen.')) return;
+      bulkDelete(ids);
+    };
+    $('#mAllDel').onclick = function () {
+      var word = prompt('Wirklich ALLE ' + adminRows.length + ' Fotos endgültig löschen?\n' +
+        'Vorher als ZIP herunterladen!\n\nZum Bestätigen LOESCHEN eintippen:');
+      if (!word || word.trim().toUpperCase() !== 'LOESCHEN') { toast('Abgebrochen.'); return; }
+      bulkDelete(adminRows.map(function (r) { return r.id; }));
+    };
     Array.prototype.forEach.call(box.querySelectorAll('[data-h]'), function (b) {
       b.onclick = function () { adminHide(b.dataset.h, b.dataset.v === '1'); };
     });
-    Array.prototype.forEach.call(box.querySelectorAll('[data-x]'), function (b) {
-      b.onclick = function () {
-        if (!confirm('Foto endgültig löschen?')) return;
-        api.rpc('ep_admin_delete', { p_pin: lsGet(LS.pin, ''), p_id: b.dataset.x }).then(function (path) {
-          adminRows = adminRows.filter(function (r) { return r.id !== b.dataset.x; });
-          renderModList(); refresh(true); toast('Gelöscht.');
-          // Die Bilddatei zusätzlich über die Storage-API entfernen. Ohne
-          // Löschrecht schlägt das fehl — das Foto ist trotzdem überall weg,
-          // die Datei verschwindet dann beim Aufräumen nach dem Fest.
-          if (path) api.removeObject(path).catch(function () {});
-        }).catch(function (e) { toast('Fehler: ' + e.message, 4200); });
-      };
+  }
+
+  // Reihum, vier gleichzeitig — schnell genug für einige hundert Fotos und
+  // schonend für die Datenbank.
+  function bulkRun(ids, fn, label) {
+    var done = 0, failed = 0, total = ids.length, queue = ids.slice();
+    function tick() {
+      var pr = $('#mProg');
+      if (pr) pr.innerHTML = '<span class="sp"></span> ' + label + ': ' + done + ' von ' + total +
+        (failed ? ' · ' + failed + ' fehlgeschlagen' : '');
+    }
+    tick();
+    function worker() {
+      var id = queue.shift();
+      if (!id) return Promise.resolve();
+      return fn(id).then(function () { done++; }, function () { failed++; })
+        .then(function () { tick(); return worker(); });
+    }
+    return Promise.all([worker(), worker(), worker(), worker()])
+      .then(function () { return { done: done, failed: failed }; });
+  }
+
+  function bulkDelete(ids) {
+    var pin = lsGet(LS.pin, '');
+    return bulkRun(ids, function (id) {
+      return api.rpc('ep_admin_delete', { p_pin: pin, p_id: id }).then(function (path) {
+        adminRows = adminRows.filter(function (r) { return r.id !== id; });
+        delete modSel[id];
+        if (path) {
+          api.removeObject(path).catch(function () {});
+          api.removeObject(thumbPath(path)).catch(function () {});
+        }
+      });
+    }, 'Löschen').then(function (r) {
+      renderModList(); refresh(true);
+      toast(r.done + ' gelöscht' + (r.failed ? ', ' + r.failed + ' fehlgeschlagen' : '') + '.', 4200);
+    });
+  }
+
+  function bulkHide(ids) {
+    var pin = lsGet(LS.pin, '');
+    return bulkRun(ids, function (id) {
+      return api.rpc('ep_admin_set_hidden', { p_pin: pin, p_id: id, p_hidden: true }).then(function () {
+        adminRows.forEach(function (r) { if (r.id === id) r.hidden = true; });
+      });
+    }, 'Verbergen').then(function (r) {
+      modSel = {}; renderModList(); refresh(true);
+      toast(r.done + ' verborgen' + (r.failed ? ', ' + r.failed + ' fehlgeschlagen' : '') + '.', 4200);
     });
   }
   function adminHide(id, hide) {

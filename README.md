@@ -23,7 +23,9 @@ Ohne App-Installation, ohne Registrierung, ohne Werbung.
 | 📺 **Slideshow** | Vollbildmodus für TV/Beamer, mischt neue Fotos automatisch ein, „neu"-Badge |
 | 👤 **Meine Fotos** | jeder Gast kann eigene Fotos selbst wieder löschen |
 | 🖨 **Aushang zum Ausdrucken** | fertige A4-Seite oder vier Tischkarten, QR und Kurzanleitung, druckfertig aus dem Browser (`#/print`) |
-| 🔑 **Gastgeber-Bereich** | QR-Code-Generator, Live-Zahlen, Moderation, ZIP-Download aller Fotos |
+| 🔑 **Gastgeber-Bereich** | QR-Code, Live-Zahlen, Selbsttest, ZIP-Download |
+| ☑️ **Moderation mit Mehrfachauswahl** | Fotos ankreuzen → verbergen oder löschen; „alle löschen" mit Tipp-Bestätigung |
+| 📉 **Sparsam mit Datenvolumen** | die Galerie lädt 420-px-Vorschaubilder (~15 KB), das Original nur im Vollbild |
 | 📦 **0 € Betrieb** | GitHub Pages + Supabase Free Tier |
 
 Kein Build-Schritt, keine npm-Abhängigkeiten, keine CDN-Aufrufe zur Laufzeit —
@@ -259,6 +261,27 @@ erscheint sofort Text, und ohne Netz greift die Systemschrift
 (`Snell Roundhand` auf iPhone/Mac, `Segoe Script` auf Windows, sonst Georgia).
 Wer auch das vermeiden will, löscht die beiden `<link>`-Zeilen in
 `index.html` — das Layout bleibt unverändert.
+
+## Kapazität: was das Supabase-Free-Tier trägt
+
+| Grenze (Free) | Wert | Für dieses Fest |
+|---|---|---|
+| Speicher (Storage) | **1 GB** | Foto ~400 KB + Vorschau ~15 KB → **etwa 2.400 Fotos** |
+| Datenbank | 500 MB | eine Zeile ist ~200 Byte → praktisch unbegrenzt |
+| Datenverkehr raus | **5 GB / Monat** | siehe unten — das ist die eigentliche Grenze |
+| Gleichzeitige Gäste | kein festes Limit | 40 Handys sind für die REST-API unkritisch |
+| Dateigröße | 50 MB | wird nie erreicht (komprimiert auf ~400 KB) |
+| Projekt-Pause | nach **7 Tagen ohne Zugriff** | Fotopaket zeitnah herunterladen! |
+
+**Der Datenverkehr ist der Flaschenhals, nicht der Speicher.** Jeder Galerie-Besuch
+lädt Bilder herunter. Ohne Vorschaubilder wären das 40 Gäste × 300 Fotos × 400 KB
+≈ **4,8 GB** — das Monatslimit wäre am Nachmittag erreicht und die Galerie tot.
+
+Deshalb lädt die Galerie **420-px-Vorschaubilder** (~15 KB). Dieselbe Runde kostet
+damit ~180 MB statt 4,8 GB, also **rund 96 % weniger**. Das Original wird nur
+geholt, wenn jemand ein Foto im Vollbild öffnet, und für die Slideshow und den
+ZIP-Download. Zusätzlich werden die Bilder eine Woche im Browser zwischen-
+gespeichert, sodass Zweitbesuche nichts mehr kosten.
 
 ## Sicherheit & Grenzen — ehrlich
 
