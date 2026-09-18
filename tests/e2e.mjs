@@ -17,14 +17,22 @@ await ctx.route('**/tasks.js', async route => {
 });
 const page = await ctx.newPage();
 const errors = [];
-page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+page.on('console', m => {
+  const s = m.text();
+  // Die Schriftart kommt von Google Fonts; in abgeschotteten Testumgebungen
+  // scheitert der Abruf. Die App faellt dann auf die Systemschrift zurueck.
+  if (/ERR_CERT_AUTHORITY_INVALID|fonts\.(googleapis|gstatic)/.test(s)) return;
+  if (m.type() === 'error') errors.push(s);
+});
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 
 await page.goto(BASE, { waitUntil: 'networkidle' });
 
 // --- Onboarding ---
 ok(await page.locator('#gname').isVisible(), 'Onboarding wird gezeigt');
-ok((await page.locator('#view h1').first().textContent()).includes('Willkommen'), 'Begrüßung vorhanden');
+ok((await page.locator('#view h1').first().textContent()).includes('Fotograf'), 'Begrüßung vorhanden');
+ok(await page.locator('.brandbar .script').isVisible(), 'Einladungs-Kopf im Kartenlook');
+ok((await page.locator('.prog-list .p').count()) === 5, 'Programm der Einladung wird gezeigt');
 ok((await page.content()).includes('Kinderfotos'), 'Datenschutz-Hinweis inkl. Kinderfotos');
 await page.fill('#gname', 'Hajo');
 await page.screenshot({ path: SD + '/s1-start.png' });

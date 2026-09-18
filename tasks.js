@@ -34,11 +34,20 @@ window.EVENT = {
   supabaseKey: 'sb_publishable_sZiwf2UNYoFtVczGSSlJXQ_sATOiwCp',
   supabaseBucket: 'eventpic',
 
-  title: 'Thomas wird 60',
+  title: 'Thomas jubelt!',
   subtitle: 'Mach mit: {n} Fotoaufgaben für den schönsten Tag',  // {n} = Anzahl
   honoree: 'Thomas',
-  dateLabel: '',            // z.B. '13. Juni 2026' — leer = wird nicht angezeigt
-  accent: '#c8102e',        // Akzentfarbe der App
+  dateLabel: '19. September 2026 · Gewerbepark Karow',
+  accent: '#4a3527',        // Akzentfarbe der App (Braun der Einladungskarte)
+
+  // Programm von der Einladungskarte. Zeiten ohne Uhrzeit einfach leer lassen.
+  program: [
+    { time: '11:00', text: 'Empfang und Begrüßung' },
+    { time: '11:30', text: 'Blasorchester Dorf Mecklenburg e.V.' },
+    { time: '',      text: 'Anschließend: Essen aus der Gulaschkanone' },
+    { time: '',      text: 'Feiern im Festzelt, geselliges Beisammensein bei Bier und Wein' },
+    { time: '16:00', text: 'Ausklang der Feier' },
+  ],
   slideshowSeconds: 6,      // Bildwechsel in der Slideshow
   showLeaderboard: false,   // Spaß-Rangliste (siehe Lastenheft F-35)
   maxEdge: 1600,            // längste Bildkante nach Komprimierung (px)

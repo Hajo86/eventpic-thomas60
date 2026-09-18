@@ -240,6 +240,19 @@ Live-Zahlen, Einstellungen, Löschen eigener Fotos, Abweisen von Nicht-Bildern.
 
 ---
 
+## Design
+
+Farben, Schriftzug und das Ähren-Emblem stammen von der Einladungskarte:
+Creme (`#f4f1e4`), dunkles Braun (`#4a3527`), Ähren-Gold (`#b5892a`). Das
+Emblem mit der 60 ist als SVG nachgebaut und funktioniert offline.
+
+Der Schriftzug nutzt **Yellowtail** von Google Fonts. Das ist die einzige
+externe Abhängigkeit zur Laufzeit und bewusst unkritisch: Mit `display=swap`
+erscheint sofort Text, und ohne Netz greift die Systemschrift
+(`Snell Roundhand` auf iPhone/Mac, `Segoe Script` auf Windows, sonst Georgia).
+Wer auch das vermeiden will, löscht die beiden `<link>`-Zeilen in
+`index.html` — das Layout bleibt unverändert.
+
 ## Sicherheit & Grenzen — ehrlich
 
 - Der **Anon-Key** steckt zur Laufzeit im Browser jedes Gasts. Das ist bei Supabase so

@@ -72,7 +72,9 @@
     var m = document.querySelector('meta[name=theme-color]');
     if (m) m.setAttribute('content', CFG.accent || '#c8102e');
     document.title = (CFG.title || 'Fotoaufgaben') + ' – Fotoaufgaben';
-    $('#hTitle').textContent = CFG.title || 'Fotoaufgaben';
+    var ht = $('#hTitle');
+    ht.textContent = CFG.title || 'Fotoaufgaben';
+    ht.className = 'script';
   }
 
   /* ======================= 3. Gast ======================================= */
@@ -413,6 +415,50 @@
 
   window.addEventListener('online', function () { toast('Wieder online – Fotos werden gesendet.'); flush(); });
 
+  /* ---- Ähren-Emblem (Motiv der Jubiläums-Plaketten von der Einladung) ---- */
+  function emblem(size, label) {
+    var r = size / 2, ear = size * 0.30;
+    function side(dir) {
+      var out = '', x0 = r + dir * (r * 0.60), y0 = r + size * 0.30;
+      out += '<path d="M' + x0 + ' ' + y0 + ' Q' + (r + dir * r * 0.78) + ' ' + (r) +
+        ' ' + (r + dir * r * 0.52) + ' ' + (r - size * 0.30) + '" fill="none" ' +
+        'stroke="currentColor" stroke-width="' + (size * 0.045) + '" stroke-linecap="round"/>';
+      for (var i = 0; i < 4; i++) {
+        var f = i / 3.4, px = x0 + (r * 0.16 * dir) - dir * f * r * 0.06,
+            py = y0 - f * size * 0.52;
+        out += '<ellipse cx="' + (px + dir * ear * 0.22) + '" cy="' + py + '" rx="' + (ear * 0.19) +
+          '" ry="' + (ear * 0.10) + '" transform="rotate(' + (dir * -38) + ' ' +
+          (px + dir * ear * 0.22) + ' ' + py + ')" fill="currentColor"/>';
+      }
+      return out;
+    }
+    return '<span class="emblem" style="width:' + size + 'px;height:' + size + 'px;color:var(--gold)">' +
+      '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true">' +
+      '<circle cx="' + r + '" cy="' + r + '" r="' + (r * 0.995) + '" fill="none" stroke="currentColor" stroke-width="' + (size * 0.05) + '"/>' +
+      side(-1) + side(1) + '</svg>' +
+      '<b style="font-size:' + (size * 0.34) + 'px">' + esc(label) + '</b></span>';
+  }
+
+  /* ---- Programm der Einladung ---- */
+  function programHtml(highlight) {
+    var pr = CFG.program || [];
+    if (!pr.length) return '';
+    var now = new Date(), hhmm = now.getHours() * 60 + now.getMinutes();
+    var currentIdx = -1;
+    if (highlight) {
+      pr.forEach(function (p, i) {
+        if (!p.time) return;
+        var m = p.time.split(':');
+        if (hhmm >= (+m[0]) * 60 + (+m[1])) currentIdx = i;
+      });
+    }
+    return '<div class="prog-list">' + pr.map(function (p, i) {
+      return '<div class="p' + (i === currentIdx ? ' now' : '') + '">' +
+        '<span class="h">' + esc(p.time || '') + '</span>' +
+        '<span>' + esc(p.text) + '</span></div>';
+    }).join('') + '</div>';
+  }
+
   /* ======================= 10. Fortschrittsring ========================== */
   function renderRing() {
     var done = doneCount(), total = TASKS.length;
@@ -452,12 +498,16 @@
   /* ---- Start / Onboarding ---- */
   function viewStart() {
     view.innerHTML =
-      '<div style="padding:22px 0 8px">' +
-      '<div class="big-num">60</div>' +
-      '<h1 style="margin:10px 0 4px">Willkommen!</h1>' +
+      '<div style="padding:18px 0 8px">' +
+      '<div class="brandbar">' + emblem(64, '60') +
+      '<div class="t"><div class="caps">Einladung</div>' +
+      '<div class="script">' + esc(CFG.title || '') + '</div>' +
+      (CFG.dateLabel ? '<div class="when">' + esc(CFG.dateLabel) + '</div>' : '') +
+      '</div></div>' +
+      '<h1 style="margin:14px 0 4px">Du bist unser Fotograf</h1>' +
       '<p style="color:var(--muted)">Heute feiert <b>' + esc(CFG.honoree || 'unser Geburtstagskind') + '</b> seinen 60. ' +
-      'Du bist heute Fotograf:in. Wir haben <b>' + TASKS.length + ' Fotoaufgaben</b> vorbereitet – ' +
-      'mach mit, so viel du magst.</p>' +
+      'Wir haben <b>' + TASKS.length + ' Fotoaufgaben</b> vorbereitet – mach mit, so viel du magst.</p>' +
+      (CFG.program && CFG.program.length ? '<div class="caps" style="margin-top:16px">Programm</div>' + programHtml(false) : '') +
       '<label class="f" for="gname">Wie heißt du?</label>' +
       '<input id="gname" type="text" autocomplete="given-name" maxlength="24" placeholder="Vorname" value="' + esc(guest) + '">' +
       '<div class="hint">Damit Thomas später sieht, von wem die Fotos sind. Du kannst das Feld auch leer lassen.</div>' +
@@ -762,6 +812,9 @@
       '<h2>' + esc(CFG.title || 'Fotoaufgaben') + '</h2>' +
       '<p>Diese Seite sammelt die Fotos aller Gäste an einem Ort – als Geschenk für ' +
       esc(CFG.honoree || 'das Geburtstagskind') + '.</p>' +
+      (CFG.program && CFG.program.length
+        ? '<div class="card" style="padding:16px;margin:14px 0"><h3>Programm</h3>' + programHtml(true) + '</div>'
+        : '') +
       '<div class="card" style="padding:16px;margin:14px 0">' +
       '<h3>So funktioniert es</h3>' +
       '<p>1. Aufgabe aussuchen · 2. Foto machen · 3. Absenden. Fertig.</p>' +
@@ -932,6 +985,7 @@
   function sheetHtml(compact) {
     var u = guestUrl().replace(/^https?:\/\//, '');
     return '<div class="sheet' + (compact ? '' : ' poster') + '">' +
+      '<div style="margin:0 auto 6px">' + emblem(compact ? 40 : 66, '60') + '</div>' +
       '<div class="kicker">Fotoaufgaben</div>' +
       '<h2 class="big">' + esc(CFG.title || '') + '</h2>' +
       '<div class="lead">Sei heute unser Fotograf' + (compact ? '' : ':in') + '!</div>' +

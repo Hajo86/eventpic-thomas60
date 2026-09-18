@@ -9,8 +9,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, '..', 'icons');
 mkdirSync(out, { recursive: true });
 
-const ACCENT = [200, 16, 46, 255];      // #c8102e
-const WHITE = [255, 255, 255, 255];
+const ACCENT = [74, 53, 39, 255];       // #4a3527 – Braun der Einladungskarte
+const WHITE = [197, 154, 58, 255];      // #c59a3a – Ähren-Gold
 
 const GLYPH = {
   '6': ['.###.', '#....', '#....', '####.', '#...#', '#...#', '.###.'],

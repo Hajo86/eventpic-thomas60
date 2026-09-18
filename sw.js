@@ -1,6 +1,6 @@
 /* Service Worker — App-Shell-Cache.
    Fotos und Galerie-Daten werden NICHT gecacht (sollen immer aktuell sein). */
-var CACHE = 'eventpic-v1';
+var CACHE = 'eventpic-v2';
 var SHELL = [
   './', './index.html', './app.js', './tasks.js', './qr.js', './zip.js',
   './manifest.json', './icons/icon-192.png', './icons/icon-512.png',
