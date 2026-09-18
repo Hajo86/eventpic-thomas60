@@ -58,7 +58,8 @@ nur auf dem Gerät. So kannst du sie in Ruhe ausprobieren.
 2. Linke Seitenleiste → **SQL Editor** → **New query**.
    Den **kompletten** Inhalt von [`schema.sql`](schema.sql) hineinkopieren.
 
-3. **Eine einzige Zeile ändern** — such nach `BITTE-AENDERN`:
+3. **Eine einzige Zeile ändern** — such nach `BITTE-AENDERN` (die Zeile kommt
+   zweimal vor; ändere **beide** oder führ hinterher Abschnitt 8 aus):
    ```sql
    values ('thomas60-2026', 'BITTE-AENDERN-0000')
    ```

@@ -73,9 +73,11 @@ create table if not exists eventpic_private.admin (
 );
 
 -- >>> PIN HIER ÄNDERN <<<
+-- "do nothing": Eine bereits gesetzte PIN wird beim erneuten Ausführen des
+-- Skripts NICHT überschrieben. Zum Setzen/Ändern Abschnitt 8 nutzen.
 insert into eventpic_private.admin (event_id, pin)
 values ('thomas60-2026', 'BITTE-AENDERN-0000')
-on conflict (event_id) do update set pin = excluded.pin;
+on conflict (event_id) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- 4. Funktionen
@@ -212,7 +214,7 @@ with checks(pruefung, ok) as (
         where routine_schema = 'public' and routine_name like 'ep!_%' escape '!')),
     ('5. Öffentlicher Storage-Bucket "eventpic"',
       (select count(*) = 1 from storage.buckets where id = 'eventpic' and public)),
-    ('6. Admin-PIN geändert',
+    ('6. Admin-PIN geändert (sonst Abschnitt 8 ausführen)',
       (select count(*) = 1 from eventpic_private.admin
         where event_id = 'thomas60-2026' and pin <> 'BITTE-AENDERN-0000'))
 )
@@ -221,7 +223,19 @@ from checks
 order by ok, pruefung;
 
 -- ---------------------------------------------------------------------------
--- 8. Nach dem Fest: aufräumen (bewusst manuell)
+-- 8. Admin-PIN setzen oder ändern
+--    Diesen Block kannst du jederzeit ALLEIN ausführen. Er ist der einzige
+--    Weg, die PIN zu ändern — das große Skript oben rührt eine bereits
+--    gesetzte PIN nicht mehr an.
+-- ---------------------------------------------------------------------------
+insert into eventpic_private.admin (event_id, pin)
+values ('thomas60-2026', 'BITTE-AENDERN-0000')      -- <<< hier die PIN eintragen
+on conflict (event_id) do update set pin = excluded.pin;
+
+select event_id, pin from eventpic_private.admin;    -- zeigt, was wirklich drinsteht
+
+-- ---------------------------------------------------------------------------
+-- 9. Nach dem Fest: aufräumen (bewusst manuell)
 -- ---------------------------------------------------------------------------
 -- Erst die Fotos herunterladen (Admin-Bereich → "Alle Fotos als ZIP"), dann:
 --
