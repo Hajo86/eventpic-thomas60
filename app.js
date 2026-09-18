@@ -844,7 +844,7 @@
 
   /* ---- Gäste-Adresse (steckt im QR-Code) ---- */
   function ownUrl() { return location.href.split('#')[0]; }
-  function guestUrl() { return lsGet(LS.url, '') || ownUrl(); }
+  function guestUrl() { return lsGet(LS.url, '') || CFG.guestUrl || ownUrl(); }
   function setGuestUrl(u) {
     u = (u || '').trim();
     if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u;
@@ -858,7 +858,7 @@
     return /claudeusercontent|claude\.ai|localhost|^127\.|^192\.168\.|\.local$/i.test(h);
   }
   function urlWarning() {
-    if (lsGet(LS.url, '')) return '';
+    if (lsGet(LS.url, '') || CFG.guestUrl) return '';
     if (!isPreviewHost()) return '';
     return '<div class="banner">Diese Seite läuft gerade in einer <b>Vorschau</b>. Die Adresse unten ' +
       'ist nur intern erreichbar — ein QR-Code damit funktioniert bei deinen Gästen <b>nicht</b>. ' +

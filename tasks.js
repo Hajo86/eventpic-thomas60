@@ -17,6 +17,11 @@ window.EVENT = {
   // in derselben Datenbank. Nur ändern, wenn du bei Null anfangen willst.
   eventId: 'thomas60-2026',
 
+  // Adresse, die im QR-Code landet. Leer lassen = die Adresse der laufenden
+  // Seite. Hier eingetragen, damit ein Ausdruck auch dann stimmt, wenn du die
+  // Seite gerade lokal oder in einer Vorschau geöffnet hast.
+  guestUrl: 'https://hajo86.github.io/eventpic-thomas60/',
+
   title: 'Thomas wird 60',
   subtitle: 'Mach mit: {n} Fotoaufgaben für den schönsten Tag',  // {n} = Anzahl
   honoree: 'Thomas',
