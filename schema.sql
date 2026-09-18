@@ -214,13 +214,21 @@ with checks(pruefung, ok) as (
         where routine_schema = 'public' and routine_name like 'ep!_%' escape '!')),
     ('5. Öffentlicher Storage-Bucket "eventpic"',
       (select count(*) = 1 from storage.buckets where id = 'eventpic' and public)),
-    ('6. Admin-PIN geändert (sonst Abschnitt 8 ausführen)',
+    -- Absichtlich 'BITTE%' statt der vollen Zeichenkette: Wer die PIN oben per
+    -- Suchen-und-Ersetzen einträgt, erwischt sonst auch diese Prüfzeile — dann
+    -- meldet der Test fälschlich einen Fehler, obwohl die PIN richtig gesetzt ist.
+    ('6. Admin-PIN gesetzt (sonst Abschnitt 8 ausführen)',
       (select count(*) = 1 from eventpic_private.admin
-        where event_id = 'thomas60-2026' and pin <> 'BITTE-AENDERN-0000'))
+        where event_id = 'thomas60-2026'
+          and pin is not null and pin not ilike 'BITTE%' and char_length(pin) >= 4))
 )
 select case when ok then '✅ ok' else '❌ FEHLT' end as status, pruefung
 from checks
 order by ok, pruefung;
+
+-- Zur Kontrolle: so lautet die gespeicherte PIN. Genau diese musst du in der
+-- App eingeben — auf Groß-/Kleinschreibung und Leerzeichen achten.
+select event_id, pin as gespeicherte_pin from eventpic_private.admin;
 
 -- ---------------------------------------------------------------------------
 -- 8. Admin-PIN setzen oder ändern
